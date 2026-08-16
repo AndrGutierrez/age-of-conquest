@@ -162,6 +162,86 @@ def liquidar_tesoro(estado: GameState, p: int) -> ResultadoTesoro:
 
 
 # ---------------------------------------------------------------------------
+# Acciones economicas voluntarias del jugador
+# ---------------------------------------------------------------------------
+
+def reclutar(estado: GameState, i: int, n: int) -> tuple[bool, str]:
+    """Compra n soldados en la provincia i (Seccion 2.1.5 y 2.2).
+
+    Costo: c_recl de oro por soldado; ademas cada soldado se resta de la
+    poblacion civil (delta_rec). No se permite si el oro o la poblacion
+    son insuficientes.
+    """
+    cfg = estado.config
+    prov = estado.provincias[i]
+    p = prov.dueno
+    if p == NEUTRAL:
+        return False, "La provincia no tiene dueno"
+    j = estado.jugadores[p]
+    if n <= 0:
+        return False, "Cantidad de reclutas invalida"
+    costo = cfg.c_recl * n
+    if j.tesoro < costo:
+        return False, f"Oro insuficiente (cuesta {costo:.1f}, hay {j.tesoro:.1f})"
+    if prov.poblacion < n:
+        return False, f"Poblacion insuficiente ({prov.poblacion:.0f} hab.)"
+    j.tesoro -= costo
+    prov.poblacion -= n
+    prov.ejercitos += n
+    prov.reclutas_turno += n  # contabilizado en C_recl y en el balance
+    return True, f"Reclutados {n} soldados en {estado.mapa.territorio(i).nombre}"
+
+
+def construir(estado: GameState, i: int, tipo: str) -> tuple[bool, str]:
+    """Mejora un nivel la fortificacion o la infraestructura de la provincia.
+
+    Los costos son incrementales: c[nivel+1] - c[nivel] (la tabla 1.5.5 da
+    costos acumulados).
+    """
+    cfg = estado.config
+    prov = estado.provincias[i]
+    p = prov.dueno
+    if p == NEUTRAL:
+        return False, "La provincia no tiene dueno"
+    j = estado.jugadores[p]
+
+    if tipo == "fort":
+        nivel = prov.fortificacion
+        tabla, maximo = cfg.c_fort, cfg.nivel_max_fort
+        nombre = "fortificacion"
+    elif tipo == "infra":
+        nivel = prov.infraestructura
+        tabla, maximo = cfg.c_infra, cfg.nivel_max_infra
+        nombre = "infraestructura"
+    else:
+        return False, f"Tipo de construccion desconocido: {tipo}"
+
+    if nivel >= maximo:
+        return False, f"{nombre.capitalize()} al nivel maximo ({maximo})"
+    costo = tabla[nivel + 1] - tabla[nivel]
+    if j.tesoro < costo:
+        return False, f"Oro insuficiente (cuesta {costo:.1f}, hay {j.tesoro:.1f})"
+    j.tesoro -= costo
+    if tipo == "fort":
+        prov.fortificacion += 1
+    else:
+        prov.infraestructura += 1
+    return True, f"{nombre.capitalize()} de {estado.mapa.territorio(i).nombre} a nivel {nivel + 1}"
+
+
+def fijar_impuesto(estado: GameState, i: int, tau: float) -> tuple[bool, str]:
+    """Asigna la tasa impositiva tau(i) de una provincia (limite tau_max)."""
+    cfg = estado.config
+    prov = estado.provincias[i]
+    if prov.dueno == NEUTRAL:
+        return False, "La provincia no tiene dueno"
+    if not (0.0 <= tau <= cfg.tau_max):
+        return False, f"Tasa fuera de rango [0, {cfg.tau_max}]"
+    prov.impuesto = tau
+    return True, f"Impuesto de {estado.mapa.territorio(i).nombre} fijado en {tau:.0%}"
+
+
+# ---------------------------------------------------------------------------
 # 2.2 Dinamica poblacional
 # ---------------------------------------------------------------------------
 

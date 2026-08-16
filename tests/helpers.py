@@ -62,6 +62,31 @@ def nuevo_estado(terreno=0):
     return s
 
 
+class MiniMapa:
+    """Mapa falso pequeno: n territorios en anillo (i adyacente a i+1 mod n).
+
+    Los territorios pertenecen al continente 99 (sin bonificaciones).
+    """
+
+    def __init__(self, n=4, adyacencias=None):
+        self.n = n
+        self.territorios = [
+            Territorio(id=i, nombre=f"T{i}", continente=99, terreno=0)
+            for i in range(n)
+        ]
+        self.adyacencias = adyacencias or {i: [(i + 1) % n] for i in range(n)}
+        self.territorios_continente = {99: list(range(n))}
+
+    def territorio(self, i):
+        return self.territorios[i]
+
+    def vecinos(self, i):
+        return list(self.adyacencias.get(i, []))
+
+    def son_adyacentes(self, i, k):
+        return k in self.adyacencias.get(i, [])
+
+
 class MapaParcheadoTestCase(unittest.TestCase):
     """TestCase que mantiene el mapa stub activo durante toda la prueba."""
 
