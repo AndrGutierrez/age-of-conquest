@@ -213,7 +213,7 @@ class TestMovimiento(MotorTestCase):
         with self.assertRaises(ValueError):
             self.motor.ejecutar_movimiento(0, 0, 3)  # mismo territorio
         with self.assertRaises(ValueError):
-            self.motor.ejecutar_movimiento(0, 3, 10)  # no adyacentes
+            self.motor.ejecutar_movimiento(0, 2, 3)  # no adyacentes (anillo)
         self.estado.provincias[3].dueno = 1
         with self.assertRaises(ValueError):
             self.motor.ejecutar_movimiento(0, 3, 10)  # n >= A(origen)

@@ -74,7 +74,10 @@ class MiniMapa:
             Territorio(id=i, nombre=f"T{i}", continente=99, terreno=0)
             for i in range(n)
         ]
-        self.adyacencias = adyacencias or {i: [(i + 1) % n] for i in range(n)}
+        # Por defecto: anillo bidireccional (i adyacente a i-1 e i+1 mod n)
+        self.adyacencias = adyacencias or {
+            i: [(i - 1) % n, (i + 1) % n] for i in range(n)
+        }
         self.territorios_continente = {99: list(range(n))}
 
     def territorio(self, i):
