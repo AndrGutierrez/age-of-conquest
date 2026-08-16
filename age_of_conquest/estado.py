@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .config import CONFIG, Config
-from .mapa import Mapa, Territorio
+from .mapa import MAPA
 
 # ---------------------------------------------------------------------------
 # Constantes de jugador
@@ -56,8 +56,9 @@ class Provincia:
     bajas_combate: int = 0          # delta_comb(i): dano colateral civil
     hubo_batalla: bool = False      # hubo combate en i este turno
 
-    def terreno(self) -> Territorio:
-        return Mapa.territorio(self.id)
+    def terreno(self) -> object:
+        """Devuelve el Territorio (datos geograficos fijos) de la provincia."""
+        return MAPA.territorio(self.id)
 
     def reiniciar_flujos(self) -> None:
         """Limpia las variables de flujo al cerrar la ronda global."""
@@ -94,7 +95,7 @@ class GameState:
 
     def __init__(self, config: Config | None = None) -> None:
         self.config = config or CONFIG
-        self.mapa = Mapa
+        self.mapa = MAPA
         self.turno: int = 0            # t: turno global de la simulacion
         self.provincias: dict[int, Provincia] = {}
         self.jugadores: dict[int, Jugador] = {}
