@@ -83,11 +83,13 @@ class Jugador:
     # --- indicadores auxiliares del turno (Seccion 2.3) ---
     en_guerra: bool = False       # W(p): en guerra con al menos otro jugador
     victorias_turno: bool = False  # V(p): conquisto al menos 1 territorio
+    bancarrota: bool = False      # tesoro negativo tras el cierre del turno
 
     def reiniciar_turno(self) -> None:
         self.conquistas_turno = 0
         self.en_guerra = False
         self.victorias_turno = False
+        self.bancarrota = False
 
 
 class GameState:
