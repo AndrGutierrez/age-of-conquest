@@ -17,8 +17,8 @@ python main.py --help
 ## Tests y validación
 
 ```bash
-python -m unittest discover -s tests -v   # tests unitarios
-python age_of_conquest/validacion.py      # Monte Carlo vs tabla esperada (§2.4.6)
+python -m unittest discover -s tests -v            # tests unitarios
+python -m age_of_conquest.validacion               # Monte Carlo vs tabla esperada (2.4.6)
 ```
 
 ## Arquitectura
