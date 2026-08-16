@@ -162,6 +162,7 @@ class Motor:
 
     def _procesar(self, ev: Evento) -> None:
         estado = self.estado
+        estado.fase_actual = ev.tipo  # Phi(t): fase activa del turno
         if ev.tipo in (FASE_REFUERZO, FASE_ATAQUE, FASE_MOVIMIENTO, FASE_FIN_TURNO):
             estado.jugador_activo = ev.jugador
         if ev.tipo == FASE_REFUERZO:
@@ -184,9 +185,14 @@ class Motor:
             # Jugador eliminado mientras su REFUERZO esperaba en la LEF
             self._siguiente_fase(p)
             return
-        r = self.refuerzos_totales(p)
-        estado.registrar(f"Jugador {p} recibe {r} refuerzos")
-        self.controladores[p].colocar_refuerzos(estado, estado.jugadores[p], r)
+        base, bonus = self.refuerzos_desglose(p)
+        # b(p,t): bonificacion por continentes se almacena como estado
+        estado.jugadores[p].bonus_continente = bonus
+        estado.registrar(
+            f"Jugador {p} recibe {base + bonus} refuerzos "
+            f"(base {base} + continentes {bonus})"
+        )
+        self.controladores[p].colocar_refuerzos(estado, estado.jugadores[p], base + bonus)
         self._programar(FASE_ATAQUE, p)
 
     def _fase_ataque(self, p: int) -> None:
@@ -239,9 +245,9 @@ class Motor:
                 j.activo = False
                 estado.registrar(f"Jugador {jid} ({j.nombre}) eliminado")
 
-        # 2.7.2: condicion de victoria
+        # 2.7.2: condicion de victoria: sigma_sim = 0 <=> N_a = 1
         activos = estado.jugadores_activos()
-        if len(activos) == 1:
+        if estado.numero_activos() == 1:
             estado.ganador = activos[0]
             estado.simulacion_activa = False
             estado.registrar(f"VICTORIA del jugador {activos[0]}")
@@ -270,6 +276,15 @@ class Motor:
     # ------------------------------------------------------------------
     def refuerzos_totales(self, p: int) -> int:
         """r(p) = max(r_min, floor(T/rho)) + suma b_c (Seccion 2.5)."""
+        base, bonus = self.refuerzos_desglose(p)
+        return base + bonus
+
+    def refuerzos_desglose(self, p: int) -> tuple[int, int]:
+        """Devuelve (base, bonus) de la ecuacion de refuerzos (Seccion 2.5).
+
+        base  = max(r_min, floor(T / rho))
+        bonus = suma de b_c de los continentes controlados por completo
+        """
         cfg = self.estado.config
         t = self.estado.cantidad_territorios(p)
         base = max(cfg.r_min, t // cfg.rho)
@@ -277,7 +292,7 @@ class Motor:
             CONTINENTE_BONUS_SOLDADOS.get(c, 0)
             for c in self.estado.dueño_continentes(p)
         )
-        return base + bonus
+        return base, bonus
 
     def colocar_refuerzos(self, p: int, asignacion: dict[int, int]) -> None:
         """Aplica un vector de refuerzos r_i a las provincias de p."""

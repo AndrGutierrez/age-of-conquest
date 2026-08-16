@@ -223,6 +223,51 @@ def seccion_reproducibilidad() -> None:
     print()
 
 
+# ---------------------------------------------------------------------------
+# 7. Calibracion de la dinamica de felicidad (antes / despues)
+# ---------------------------------------------------------------------------
+
+def seccion_calibracion_felicidad() -> None:
+    """Evidencia del colapso del sistema con los parametros literales del
+    documento y el efecto de la calibracion (reversion a la media + politica
+    fiscal adaptativa de la IA)."""
+    print("# 7. Calibracion de la felicidad: parametros literales vs calibrados")
+    print()
+    print("  Escenario: provincia de un imperio en guerra todos los turnos,")
+    print("  sin victorias. H inicial = 0.80. 10 rondas.")
+    print()
+    cfg_sin = Config(delta_eq=0.0)   # parametros literales del documento
+    cfg_con = Config()               # calibrado: delta_eq = 0.45, h_eq = 0.75
+    h_sin = h_con = h_ada = 0.80
+    tau = 0.30
+    tau_ada = 0.30                   # la IA adapta el impuesto a la felicidad
+    print("  Ronda | H (literal) | pi | H (calibrado) | pi | H (calibrado+IA) | pi")
+    print("  ------|-------------|----|---------------|----|-----------------|----")
+    for t in range(1, 11):
+        if h_ada < 0.35:  # politica fiscal adaptativa (ControladorIA)
+            tau_ada = 0.10
+        dh_sin = -0.40 * tau - 0.15
+        dh_con = -0.40 * tau - 0.15 + cfg_con.delta_eq * max(0.0, cfg_con.h_eq - h_con)
+        dh_ada = -0.40 * tau_ada - 0.15 + cfg_con.delta_eq * max(0.0, cfg_con.h_eq - h_ada)
+        h_sin = max(0.0, min(1.0, h_sin + dh_sin))
+        h_con = max(0.0, min(1.0, h_con + dh_con))
+        h_ada = max(0.0, min(1.0, h_ada + dh_ada))
+        pi_sin = economia.probabilidad_rebelion(h_sin, cfg_sin)
+        pi_con = economia.probabilidad_rebelion(h_con, cfg_con)
+        pi_ada = economia.probabilidad_rebelion(h_ada, cfg_con)
+        print(
+            f"  {t:>5} | {h_sin:>11.3f} | {pi_sin:>.2f} | {h_con:>13.3f} | {pi_con:>.2f} | "
+            f"{h_ada:>15.3f} | {pi_ada:>.2f}"
+        )
+    print()
+    print("  Con los parametros literales del documento la provincia entra en")
+    print("  zona de rebelion en la ronda 2 y colapsa en la ronda 3. Con la")
+    print("  reversion a la media el colapso se retrasa, y con la politica")
+    print("  fiscal adaptativa de la IA (bajar impuestos cuando H < 0.35) la")
+    print("  felicidad se estabiliza por encima del umbral H_min = 0.25.")
+    print()
+
+
 def main() -> None:
     print()
     print("=" * 72)
@@ -235,6 +280,7 @@ def main() -> None:
     seccion_rebelion()
     seccion_economia()
     seccion_reproducibilidad()
+    seccion_calibracion_felicidad()
 
 
 if __name__ == "__main__":

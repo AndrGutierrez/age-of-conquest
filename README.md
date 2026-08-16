@@ -55,9 +55,10 @@ python -m age_of_conquest.validacion               # Monte Carlo vs tabla espera
 7. **Calibración de felicidad:** con los parámetros literales del documento el
    sistema colapsa en ~3 rondas (impuestos + guerra erosionan H más rápido de
    lo que ε_vic la restaura). Se añadió un término de reversion a la media
-   `ΔH += δ_eq·max(0, h_eq − H)` con δ_eq = 0.30 y h_eq = 0.70, y los impuestos
-   de la IA se recalibraron (Agresivo 0.30, Equilibrado 0.25, Defensivo 0.15).
-   Evidencia antes/después en la sección de Validación del informe.
+   `ΔH += δ_eq·max(0, h_eq − H)` con δ_eq = 0.45 y h_eq = 0.75, y la IA
+   adapta los impuestos a la felicidad (Agresivo 0.30, Equilibrado 0.25,
+   Defensivo 0.15; baja al 0.10 si H < 0.35). Evidencia antes/después en
+   `validacion.py` (sección 7) para el informe.
 8. **Tabla §2.4.6:** las filas (2,2) y (2,1) del documento contienen errores;
    los valores correctos por enumeración exhaustiva son (1.221, 0.779) y
    (0.421, 0.579). El simulador implementa las ecuaciones (2.4.2)-(2.4.3) y

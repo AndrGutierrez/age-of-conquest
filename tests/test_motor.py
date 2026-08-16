@@ -223,6 +223,11 @@ class TestMovimiento(MotorTestCase):
 
 class TestEliminacionPorRebelion(MotorTestCase):
     def test_jugador_pierde_su_ultimo_territorio_por_rebelion(self):
+        # Config literal del documento (sin termino de calibracion) para
+        # probar el caso borde de la Seccion 2.8: H = 0 -> pi = 1.
+        self.estado = GameState(Config(delta_eq=0.0))
+        self.estado.inicializar_provincias()
+        self.motor = Motor(self.estado, {}, self.rng)
         self.estado.crear_jugador("P1")
         self.estado.crear_jugador("P2")
         self.estado.provincias[0].dueno = 1

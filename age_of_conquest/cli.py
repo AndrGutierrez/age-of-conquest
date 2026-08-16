@@ -246,8 +246,21 @@ class ControladorHumano(ControladorJugador):
                 except ValueError:
                     c.print("Numeros invalidos")
                     continue
+                if origen not in estado.provincias or destino not in estado.provincias:
+                    c.print("Id de provincia fuera de rango")
+                    continue
                 modo = partes[3] if len(partes) > 3 else "total"
-                max_rondas = None if modo in ("total", "todo") else int(modo)
+                if modo not in ("total", "todo"):
+                    try:
+                        max_rondas = int(modo)
+                    except ValueError:
+                        c.print("Modo invalido: usa 1, N o total")
+                        continue
+                    if max_rondas < 1:
+                        c.print("Numero de rondas invalido")
+                        continue
+                else:
+                    max_rondas = None
                 try:
                     res = motor.ejecutar_ataque(origen, destino, max_rondas)
                 except ValueError as e:
@@ -271,6 +284,9 @@ class ControladorHumano(ControladorJugador):
                 except ValueError:
                     c.print("Numeros invalidos")
                     continue
+                if i not in estado.provincias:
+                    c.print("Id de provincia fuera de rango")
+                    continue
                 ok, msg = economia.reclutar(estado, i, n)
                 c.print(msg if ok else f"Error: {msg}")
             elif orden == "construir":
@@ -282,6 +298,9 @@ class ControladorHumano(ControladorJugador):
                 except ValueError:
                     c.print("Numero invalido")
                     continue
+                if i not in estado.provincias:
+                    c.print("Id de provincia fuera de rango")
+                    continue
                 ok, msg = economia.construir(estado, i, partes[2])
                 c.print(msg if ok else f"Error: {msg}")
             elif orden == "impuesto":
@@ -292,6 +311,9 @@ class ControladorHumano(ControladorJugador):
                     i, tau = int(partes[1]), float(partes[2])
                 except ValueError:
                     c.print("Valores invalidos")
+                    continue
+                if i not in estado.provincias:
+                    c.print("Id de provincia fuera de rango")
                     continue
                 ok, msg = economia.fijar_impuesto(estado, i, tau)
                 c.print(msg if ok else f"Error: {msg}")
@@ -342,6 +364,9 @@ class ControladorHumano(ControladorJugador):
                     origen, destino, n = int(partes[1]), int(partes[2]), int(partes[3])
                 except ValueError:
                     c.print("Numeros invalidos")
+                    continue
+                if origen not in estado.provincias or destino not in estado.provincias:
+                    c.print("Id de provincia fuera de rango")
                     continue
                 try:
                     motor.ejecutar_movimiento(origen, destino, n)

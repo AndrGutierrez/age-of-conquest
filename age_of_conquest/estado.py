@@ -79,6 +79,7 @@ class Jugador:
     activo: bool = True           # a(p): 1 si sigue en partida, 0 si eliminado
     tecnologia: int = 0           # L(p): nivel tecnologico (estado, sin uso aun)
     conquistas_turno: int = 0     # C(p): conquistas acumuladas en el turno
+    bonus_continente: int = 0     # b(p): bonificacion por continentes completos
 
     # --- indicadores auxiliares del turno (Seccion 2.3) ---
     en_guerra: bool = False       # W(p): en guerra con al menos otro jugador
@@ -99,6 +100,7 @@ class GameState:
         self.config = config or CONFIG
         self.mapa = MAPA
         self.turno: int = 0            # t: turno global de la simulacion
+        self.fase_actual: str = ""     # Phi(t): fase activa dentro del turno
         self.provincias: dict[int, Provincia] = {}
         self.jugadores: dict[int, Jugador] = {}
         self.jugador_activo: int = NEUTRAL  # p*(t)
@@ -174,6 +176,10 @@ class GameState:
     def jugadores_activos(self) -> list[int]:
         """Jugadores vivos, en orden de turno (id creciente)."""
         return [jid for jid, j in self.jugadores.items() if j.activo]
+
+    def numero_activos(self) -> int:
+        """N_a(t): numero de jugadores activos (Seccion 1.2.3)."""
+        return len(self.jugadores_activos())
 
     def dueño_continentes(self, p: int) -> list[int]:
         """Continentes c completamente controlados por p."""

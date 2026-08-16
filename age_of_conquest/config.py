@@ -98,9 +98,12 @@ class Config:
     #: CALIBRACION (no contemplado en el documento): termino de recuperacion
     #: natural de la felicidad hacia un equilibrio h_eq. Sin este termino el
     #: sistema colapsa en ~3 rondas (impuestos + guerra > recuperacion por
-    #: victorias); ver seccion de Validacion del informe.
-    delta_eq: float = 0.30           # tasa de reversion hacia la media
-    h_eq: float = 0.70               # felicidad de equilibrio (media movil)
+    #: victorias); ver seccion de Validacion del informe. Con los valores
+    #: elegidos un imperio en guerra con impuestos <= 0.15 se estabiliza por
+    #: encima del umbral H_min, mientras que los perfiles agresivos siguen
+    #: expuestos al ciclo impuestos-guerra-rebelion (retroalimentacion 2.3).
+    delta_eq: float = 0.45           # tasa de reversion hacia la media
+    h_eq: float = 0.75               # felicidad de equilibrio (media movil)
 
     # ------------------------------------------------------------------
     # 1.5.5 Parametros de infraestructura
@@ -120,10 +123,6 @@ class Config:
     felicidad_inicial: float = 0.80  # felicidad inicial de cada provincia
     ejercitos_iniciales: int = 3     # tropas por provincia al repartir el mapa
     guarnicion_neutral: int = 2      # milicias de una provincia rebelde/neutral
-    costo_bonus_continente: float = 5.0  # oro por turno por continente completo
-
-    #: margen de tropas que una IA deja como guarnicion minima al atacar
-    guarnicion_min_ia: int = 2
 
     #: niveles maximos de construccion (len(c_fort) - 1 y len(c_infra) - 1)
     @property
