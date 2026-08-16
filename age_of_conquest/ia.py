@@ -35,9 +35,9 @@ UMBRAL_ATAQUE = {
 
 #: tasa impositiva base por perfil (politica fiscal)
 IMPUESTO_BASE = {
-    PERFIL_AGRESIVO: 0.40,
-    PERFIL_EQUILIBRADO: 0.30,
-    PERFIL_DEFENSIVO: 0.20,
+    PERFIL_AGRESIVO: 0.30,
+    PERFIL_EQUILIBRADO: 0.25,
+    PERFIL_DEFENSIVO: 0.15,
 }
 
 #: maximo de ataques por turno (evita bucles infinitos)
@@ -182,7 +182,7 @@ class ControladorIA(ControladorJugador):
     # ------------------------------------------------------------------
     def fase_ataque(self, motor: Motor, estado: GameState, jugador: Jugador) -> None:
         perfil = jugador.perfil
-        umbral = UMBRAL_ATAQUE[perfil]
+        umbral = UMBRAL_ATAQUE.get(perfil, 1.2)
         max_rondas = None if perfil != PERFIL_DEFENSIVO else 1
         realizados = 0
         while realizados < MAX_ATAQUES:
@@ -227,9 +227,10 @@ class ControladorIA(ControladorJugador):
     # Fase MOVIMIENTO: un unico movimiento de reagrupacion (2.6)
     # ------------------------------------------------------------------
     def fase_movimiento(self, motor: Motor, estado: GameState, jugador: Jugador) -> None:
-        origen, destino = self._elegir_movimiento(estado, jugador)
-        if origen is None:
+        eleccion = self._elegir_movimiento(estado, jugador)
+        if eleccion is None:
             return
+        origen, destino = eleccion
         cantidad = estado.provincias[origen].ejercitos - 1
         if cantidad >= 1:
             try:

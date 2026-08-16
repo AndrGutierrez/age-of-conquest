@@ -292,7 +292,12 @@ def variacion_felicidad(prov: Provincia, estado: GameState, p: int) -> float:
     """Delta H de una provincia (Seccion 2.3).
 
     Delta H = -delta_tau*tau - delta_w*W_p + epsilon_vic*V_p - delta_oc*O_new
-    La penalizacion por bancarrota es una decision de diseno adicional.
+
+    Termino adicional de calibracion: reversion hacia el equilibrio
+    delta_eq * max(0, h_eq - H) (recuperacion natural cuando la felicidad
+    esta por debajo de su nivel de equilibrio; sin el, el sistema decae
+    monotonicamente). La penalizacion por bancarrota es otra decision de
+    diseno adicional.
     """
     cfg = estado.config
     j = estado.jugadores[p]
@@ -305,6 +310,7 @@ def variacion_felicidad(prov: Provincia, estado: GameState, p: int) -> float:
         dh -= cfg.delta_oc
     if j.bancarrota:
         dh -= cfg.delta_banc
+    dh += cfg.delta_eq * max(0.0, cfg.h_eq - prov.felicidad)
     return dh
 
 

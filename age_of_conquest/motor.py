@@ -129,8 +129,19 @@ class Motor:
             if self.max_turnos is not None and self.estado.turno >= self.max_turnos:
                 self.estado.simulacion_activa = False
                 break
-            ev = self.lef.pop(0)
-            self._procesar(ev)
+            self.procesar_siguiente()
+
+    def procesar_siguiente(self) -> Evento | None:
+        """Procesa un unico evento de la LEF y lo devuelve (o None).
+
+        Permite a la interfaz de consola ejecutar la simulacion paso a
+        paso e imprimir los eventos registrados.
+        """
+        if not self.lef or not self.estado.simulacion_activa:
+            return None
+        ev = self.lef.pop(0)
+        self._procesar(ev)
+        return ev
 
     def _repartir_mapa(self) -> None:
         """Distribucion inicial aleatoria de territorios entre los jugadores.

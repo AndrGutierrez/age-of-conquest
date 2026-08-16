@@ -175,8 +175,9 @@ class TestFelicidad(MapaParcheadoTestCase):
         prov.dueno = 1
         prov.felicidad = 0.05
         prov.impuesto = 0.5
+        # Delta H = -0.2 + delta_eq*(h_eq - H) = -0.2 + 0.30*0.65 = -0.005
         economia.actualizar_felicidad(s)
-        self.assertEqual(prov.felicidad, 0.0)
+        self.assertAlmostEqual(prov.felicidad, 0.045)
 
     def test_impuestos_erosionan_felicidad(self):
         s = self.estado

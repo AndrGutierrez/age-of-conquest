@@ -95,6 +95,13 @@ class Config:
     gamma: float = 2.0               # exponente del riesgo de rebelion
     delta_banc: float = 0.10         # penalizacion de felicidad por bancarrota
 
+    #: CALIBRACION (no contemplado en el documento): termino de recuperacion
+    #: natural de la felicidad hacia un equilibrio h_eq. Sin este termino el
+    #: sistema colapsa en ~3 rondas (impuestos + guerra > recuperacion por
+    #: victorias); ver seccion de Validacion del informe.
+    delta_eq: float = 0.30           # tasa de reversion hacia la media
+    h_eq: float = 0.70               # felicidad de equilibrio (media movil)
+
     # ------------------------------------------------------------------
     # 1.5.5 Parametros de infraestructura
     # ------------------------------------------------------------------

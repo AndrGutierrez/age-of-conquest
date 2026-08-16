@@ -99,21 +99,21 @@ class TestPoliticaFiscal(unittest.TestCase):
         j = self.estado.crear_jugador("P1", perfil=PERFIL_AGRESIVO)
         self.estado.provincias[0].dueno = 1
         self.ia._politica_fiscal(self.estado, j)
-        self.assertAlmostEqual(self.estado.provincias[0].impuesto, 0.40)
+        self.assertAlmostEqual(self.estado.provincias[0].impuesto, 0.30)
 
     def test_adaptacion_por_felicidad_baja(self):
         j = self.estado.crear_jugador("P1", perfil=PERFIL_AGRESIVO)
         self.estado.provincias[0].dueno = 1
         self.estado.provincias[0].felicidad = 0.1
         self.ia._politica_fiscal(self.estado, j)
-        self.assertAlmostEqual(self.estado.provincias[0].impuesto, 0.35)
+        self.assertAlmostEqual(self.estado.provincias[0].impuesto, 0.25)
 
     def test_adaptacion_por_tesoro_bajo(self):
         j = self.estado.crear_jugador("P1", perfil=PERFIL_DEFENSIVO)
         j.tesoro = 5.0
         self.estado.provincias[0].dueno = 1
         self.ia._politica_fiscal(self.estado, j)
-        self.assertAlmostEqual(self.estado.provincias[0].impuesto, 0.25)
+        self.assertAlmostEqual(self.estado.provincias[0].impuesto, 0.20)
 
 
 class TestAtaquesIA(unittest.TestCase):

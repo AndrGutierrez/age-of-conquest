@@ -52,3 +52,13 @@ python age_of_conquest/validacion.py      # Monte Carlo vs tabla esperada (§2.4
    no ejecuta turnos y puede ser atacada.
 6. **Población, felicidad y rebelión** se actualizan una vez por ronda global
    (turno completo), como indica §2.3.
+7. **Calibración de felicidad:** con los parámetros literales del documento el
+   sistema colapsa en ~3 rondas (impuestos + guerra erosionan H más rápido de
+   lo que ε_vic la restaura). Se añadió un término de reversion a la media
+   `ΔH += δ_eq·max(0, h_eq − H)` con δ_eq = 0.30 y h_eq = 0.70, y los impuestos
+   de la IA se recalibraron (Agresivo 0.30, Equilibrado 0.25, Defensivo 0.15).
+   Evidencia antes/después en la sección de Validación del informe.
+8. **Tabla §2.4.6:** las filas (2,2) y (2,1) del documento contienen errores;
+   los valores correctos por enumeración exhaustiva son (1.221, 0.779) y
+   (0.421, 0.579). El simulador implementa las ecuaciones (2.4.2)-(2.4.3) y
+   reproduce los valores teóricos exactos (ver `validacion.py`).
