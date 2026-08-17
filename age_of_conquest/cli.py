@@ -142,17 +142,24 @@ def mapa_compacto(estado: GameState) -> str:
 # ---------------------------------------------------------------------------
 
 class ControladorHumano(ControladorJugador):
-    """Toma las decisiones del jugador humano via comandos de consola."""
+    """Toma las decisiones del jugador humano via menu de consola.
+
+    En cada fase se puede elegir una provincia propia (escribiendo su id)
+    para ver las acciones disponibles en ella, o pasar de turno
+    directamente con 'pasar' / 'fin'.
+    """
 
     def __init__(self, consola: Consola | None = None) -> None:
         self.consola = consola or Consola()
         self.ia_respaldo = ControladorIA()  # para el comando 'auto'
+        self._pasar_turno = False
 
     # ------------------------------------------------------------------
     # Fase REFUERZO
     # ------------------------------------------------------------------
     def colocar_refuerzos(self, estado: GameState, jugador: Jugador, cantidad: int) -> None:
         c = self.consola
+        self._pasar_turno = False
         c.print(f"\n=== TURNO {estado.turno} - {jugador.nombre.upper()} - FASE REFUERZO ===")
         c.print(f"Recibes {cantidad} refuerzos (max(3, territorios/3) + bonus de continentes).")
         c.print(tabla_provincias(estado, jugador.id))
@@ -183,7 +190,7 @@ class ControladorHumano(ControladorJugador):
                 pendientes -= n
                 c.print(f"+{n} en {estado.mapa.territorio(i).nombre} "
                         f"(A={estado.provincias[i].ejercitos})")
-            elif orden == "distribuir":
+            elif orden in ("distribuir", "pasar"):
                 # Reparto uniforme en la frontera (como la IA defensiva)
                 frontera = estado.frontera_de(jugador.id) or estado.territorios_de(jugador.id)
                 cuota = pendientes // len(frontera)
@@ -203,14 +210,51 @@ class ControladorHumano(ControladorJugador):
                 pendientes = 0
                 c.print("IA: refuerzos colocados automaticamente.")
             else:
-                c.print("Comandos: colocar <id> <n> | distribuir | estado | mapa | auto")
+                c.print("Comandos: colocar <id> <n> | distribuir/pasar | estado | mapa | auto")
 
     # ------------------------------------------------------------------
     # Fase ATAQUE
     # ------------------------------------------------------------------
+    def _detalle_provincia(self, estado: GameState, jugador: Jugador, i: int) -> str:
+        """Describe una provincia del jugador y las acciones disponibles."""
+        prov = estado.provincias[i]
+        t = prov.terreno()
+        lineas = [
+            f"  [{i:>2}] {t.nombre} | A={prov.ejercitos} | P={prov.poblacion:.0f} | "
+            f"H={prov.felicidad:.2f} | tau={prov.impuesto:.0%} | "
+            f"F={prov.fortificacion} | I={prov.infraestructura} | "
+            f"{TERRENO_NOMBRES[t.terreno]}"
+        ]
+        enemigos = estado.vecinos_enemigos_de(i, jugador.id)
+        if enemigos:
+            desc = []
+            for k in enemigos:
+                d = estado.provincias[k]
+                dueno = "Neutral" if d.dueno == NEUTRAL else estado.jugadores[d.dueno].nombre
+                desc.append(f"[{k}] {estado.mapa.territorio(k).nombre} ({dueno}, A={d.ejercitos})")
+            lineas.append("  Enemigos adyacentes: " + " | ".join(desc))
+            lineas.append(f"  Accion: atacar {i} <id enemigo> [1|N|total]")
+        propias = [
+            k for k in estado.mapa.vecinos(i)
+            if estado.provincias[k].dueno == jugador.id
+        ]
+        if propias:
+            desc = [
+                f"[{k}] {estado.mapa.territorio(k).nombre} (A={estado.provincias[k].ejercitos})"
+                for k in propias
+            ]
+            lineas.append("  Provincias propias adyacentes: " + " | ".join(desc))
+        lineas.append(
+            f"  Acciones: reclutar {i} <n> | construir {i} fort|infra | "
+            f"impuesto {i} <tasa>"
+        )
+        return "\n".join(lineas)
+
     def fase_ataque(self, motor: Motor, estado: GameState, jugador: Jugador) -> None:
         c = self.consola
         c.print(f"\n--- {jugador.nombre} - FASE ATAQUE (0 o mas ataques) ---")
+        c.print("Elige una provincia (escribe su id) para ver sus acciones, "
+                "o 'pasar' para terminar el turno.")
         while True:
             cmd = c.input("[ataque] > ").strip().lower()
             if not cmd:
@@ -219,9 +263,31 @@ class ControladorHumano(ControladorJugador):
             orden = partes[0]
             if orden == "fin":
                 break
+            elif orden == "pasar":
+                self._pasar_turno = True
+                break
             elif orden == "auto":
                 self.ia_respaldo.fase_ataque(motor, estado, jugador)
                 break
+            elif orden == "estado":
+                c.print(tabla_provincias(estado, jugador.id))
+                continue
+            elif orden == "mapa":
+                c.print(mapa_compacto(estado))
+                continue
+            elif orden == "ayuda":
+                c.print("Comandos: <id> (ver provincia) | atacar <o> <d> [1|N|total] | "
+                        "reclutar <id> <n> | construir <id> fort|infra | "
+                        "impuesto <id> <tasa> | impuestos <tasa> | estado | mapa | "
+                        "auto | fin | pasar")
+                continue
+            elif orden.isdigit():
+                i = int(orden)
+                if i not in estado.provincias:
+                    c.print("Id de provincia fuera de rango")
+                    continue
+                c.print(self._detalle_provincia(estado, jugador, i))
+                continue
             elif orden == "atacar":
                 if len(partes) < 3:
                     c.print("Uso: atacar <origen> <destino> [1|N|total]")
@@ -314,14 +380,6 @@ class ControladorHumano(ControladorJugador):
                 for i in estado.territorios_de(jugador.id):
                     economia.fijar_impuesto(estado, i, tau)
                 c.print(f"Impuestos fijados en {tau:.0%} en todas tus provincias.")
-            elif orden == "estado":
-                c.print(tabla_provincias(estado, jugador.id))
-            elif orden == "mapa":
-                c.print(mapa_compacto(estado))
-            elif orden == "ayuda":
-                c.print("Comandos: atacar <o> <d> [1|N|total] | reclutar <id> <n> | "
-                        "construir <id> fort|infra | impuesto <id> <tasa> | "
-                        "impuestos <tasa> | estado | mapa | auto | fin")
             else:
                 c.print("Comando desconocido (ayuda)")
 
@@ -330,13 +388,17 @@ class ControladorHumano(ControladorJugador):
     # ------------------------------------------------------------------
     def fase_movimiento(self, motor: Motor, estado: GameState, jugador: Jugador) -> None:
         c = self.consola
+        if self._pasar_turno:
+            # El jugador eligio pasar de turno en la fase de ataque
+            return
         c.print(f"\n--- {jugador.nombre} - FASE MOVIMIENTO (un unico movimiento) ---")
+        c.print(tabla_provincias(estado, jugador.id))
         while True:
             cmd = c.input("[movimiento] > ").strip().lower()
             if not cmd:
                 continue
             partes = cmd.split()
-            if partes[0] == "fin":
+            if partes[0] in ("fin", "pasar"):
                 break
             if partes[0] == "auto":
                 self.ia_respaldo.fase_movimiento(motor, estado, jugador)
@@ -361,7 +423,7 @@ class ControladorHumano(ControladorJugador):
                 except ValueError as e:
                     c.print(f"Error: {e}")
             else:
-                c.print("Comandos: mover <origen> <destino> <n> | estado | auto | fin")
+                c.print("Comandos: mover <origen> <destino> <n> | estado | auto | fin/pasar")
 
 
 # ---------------------------------------------------------------------------
