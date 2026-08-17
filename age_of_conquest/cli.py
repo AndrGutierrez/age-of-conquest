@@ -1,17 +1,19 @@
-"""Interfaz de consola (REPL) y modo demo automatico.
+"""Interfaz de consola y modo demo automatico.
 
 Dos modos de uso:
-    - Interactivo: el jugador humano dirige su imperio por comandos de
-      texto durante las fases de su turno; los demas imperios son IA.
+    - Interactivo: el jugador humano dirige su imperio mediante menus
+      numerados (elegir una opcion = escribir un numero). ENTER confirma
+      y 0 cancela/vuelve.
     - Demo: todos los jugadores son IA y la simulacion avanza sola
       (util para validar el motor durante n turnos sin intervencion).
 
-Comandos del humano:
-    REFUERZO:  colocar <id> <n> | distribuir | estado | mapa | auto
-    ATAQUE:    atacar <origen> <destino> [1|N|total] | reclutar <id> <n>
-               construir <id> fort|infra | impuesto <id> <tasa>
-               impuestos <tasa> | estado | mapa | fin | auto
-    MOVIMIENTO: mover <origen> <destino> <n> | estado | fin | auto
+Turno del humano:
+    REFUERZO:  elige una provincia con un numero y asigna refuerzos;
+               0 = distribuir automaticamente en la frontera.
+    ATAQUE:    elige una provincia y luego una accion numerada:
+               atacar (objetivo y modo con numeros), reclutar, construir,
+               cambiar impuesto. 0 = pasar turno sin movimiento.
+    MOVIMIENTO: origen, destino y cantidad con numeros; 0 = pasar sin mover.
 """
 
 from __future__ import annotations
@@ -141,18 +143,114 @@ def mapa_compacto(estado: GameState) -> str:
 # Controlador humano interactivo
 # ---------------------------------------------------------------------------
 
-class ControladorHumano(ControladorJugador):
-    """Toma las decisiones del jugador humano via menu de consola.
+class Menu:
+    """Menu numerado de una sola tecla.
 
-    En cada fase se puede elegir una provincia propia (escribiendo su id)
-    para ver las acciones disponibles en ella, o pasar de turno
-    directamente con 'pasar' / 'fin'.
+    Muestra opciones numeradas a partir de 1 y una opcion 0 opcional
+    (cancelar / volver / pasar). Devuelve el numero elegido (0 = opcion 0).
+    La entrada por EOF o vacia selecciona la opcion 0 por defecto, lo que
+    permite automatizar flujos con tuberias.
+    """
+
+    def __init__(
+        self,
+        consola: "Consola",
+        opciones: list[str],
+        titulo: str | None = None,
+        opcion_cero: str | None = None,
+        prompt: str = "Elige una opcion: ",
+    ) -> None:
+        self.c = consola
+        self.titulo = titulo
+        self.opciones = opciones
+        self.opcion_cero = opcion_cero
+        self.prompt = prompt
+
+    def elegir(self) -> int:
+        if self.titulo:
+            self.c.print(self.titulo)
+        for i, texto in enumerate(self.opciones, 1):
+            self.c.print(f"  {i}) {texto}")
+        if self.opcion_cero is not None:
+            self.c.print(f"  0) {self.opcion_cero}")
+        while True:
+            valor = _leer(self.c, self.prompt, "0")
+            try:
+                n = int(valor)
+            except ValueError:
+                self.c.print("Opcion invalida (escribe solo un numero)")
+                continue
+            if n == 0 and self.opcion_cero is not None:
+                return 0
+            if 1 <= n <= len(self.opciones):
+                return n
+            self.c.print("Opcion invalida (escribe solo un numero)")
+
+
+def _pedir_entero(
+    c: "Consola",
+    prompt: str,
+    minimo: int,
+    maximo: int,
+    por_defecto: int,
+) -> int:
+    """Pide un entero en [minimo, maximo]; ENTER acepta el valor por defecto."""
+    while True:
+        valor = _leer(c, prompt, str(por_defecto))
+        try:
+            n = int(valor)
+        except ValueError:
+            n = por_defecto
+        if minimo <= n <= maximo:
+            return n
+        c.print(f"Valor invalido (escribe un numero entre {minimo} y {maximo})")
+
+
+def _confirmar(c: "Consola", mensaje: str) -> bool:
+    """Confirmacion con ENTER (= si); 0 o 'n' cancela. EOF confirma."""
+    try:
+        valor = c.input(mensaje).strip().lower()
+    except EOFError:
+        return True
+    return valor not in ("0", "n", "no", "c", "cancelar")
+
+
+def _pausa(c: "Consola", mensaje: str = "Presiona ENTER para continuar...") -> None:
+    try:
+        c.input(mensaje)
+    except EOFError:
+        pass
+
+
+class ControladorHumano(ControladorJugador):
+    """Control del jugador humano mediante menus numerados.
+
+    Toda interaccion se hace con un solo numero (opciones numeradas) y
+    las teclas de confirmacion (ENTER) o cancelacion (0). En cada fase
+    se puede elegir una provincia propia para ver sus acciones, o pasar
+    de turno con la opcion 0.
     """
 
     def __init__(self, consola: Consola | None = None) -> None:
         self.consola = consola or Consola()
-        self.ia_respaldo = ControladorIA()  # para el comando 'auto'
         self._pasar_turno = False
+
+    # ------------------------------------------------------------------
+    # Utilidades de presentacion
+    # ------------------------------------------------------------------
+    def _lista_provincias(self, estado: GameState, jugador: Jugador) -> list[str]:
+        """Lineas de texto de las provincias del jugador (para los menus)."""
+        lineas = []
+        for i in estado.territorios_de(jugador.id):
+            prov = estado.provincias[i]
+            t = prov.terreno()
+            es = "frontera" if estado.vecinos_enemigos_de(i, jugador.id) else "interior"
+            lineas.append(
+                f"[{i:>2}] {t.nombre:<24} A={prov.ejercitos:>3} "
+                f"P={prov.poblacion:>6.0f} H={prov.felicidad:.2f} "
+                f"tau={prov.impuesto:.0%} ({TERRENO_NOMBRES[t.terreno]} - {es})"
+            )
+        return lineas
 
     # ------------------------------------------------------------------
     # Fase REFUERZO
@@ -162,37 +260,20 @@ class ControladorHumano(ControladorJugador):
         self._pasar_turno = False
         c.print(f"\n=== TURNO {estado.turno} - {jugador.nombre.upper()} - FASE REFUERZO ===")
         c.print(f"Recibes {cantidad} refuerzos (max(3, territorios/3) + bonus de continentes).")
-        c.print(tabla_provincias(estado, jugador.id))
 
         pendientes = cantidad
         while pendientes > 0:
-            cmd = c.input(f"[refuerzo: {pendientes} por colocar] > ").strip()
-            if not cmd:
-                continue
-            partes = cmd.split()
-            orden = partes[0].lower()
-            if orden in ("colocar", "col"):
-                if len(partes) != 3:
-                    c.print("Uso: colocar <id> <n>")
-                    continue
-                try:
-                    i, n = int(partes[1]), int(partes[2])
-                except ValueError:
-                    c.print("Numero invalido")
-                    continue
-                if i not in estado.territorios_de(jugador.id):
-                    c.print("Esa provincia no es tuya")
-                    continue
-                if not (1 <= n <= pendientes):
-                    c.print(f"Cantidad invalida (1..{pendientes})")
-                    continue
-                estado.provincias[i].ejercitos += n
-                pendientes -= n
-                c.print(f"+{n} en {estado.mapa.territorio(i).nombre} "
-                        f"(A={estado.provincias[i].ejercitos})")
-            elif orden in ("distribuir", "pasar"):
-                # Reparto uniforme en la frontera (como la IA defensiva)
-                frontera = estado.frontera_de(jugador.id) or estado.territorios_de(jugador.id)
+            ids = estado.territorios_de(jugador.id)
+            menu = Menu(
+                c,
+                self._lista_provincias(estado, jugador),
+                titulo=f"Refuerzos pendientes: {pendientes}",
+                opcion_cero="Distribuir automaticamente en la frontera",
+                prompt="Elige provincia: ",
+            )
+            n = menu.elegir()
+            if n == 0:
+                frontera = estado.frontera_de(jugador.id) or ids
                 cuota = pendientes // len(frontera)
                 for i in frontera:
                     estado.provincias[i].ejercitos += cuota
@@ -201,187 +282,226 @@ class ControladorHumano(ControladorJugador):
                     estado.provincias[frontera[k % len(frontera)]].ejercitos += 1
                 pendientes = 0
                 c.print("Refuerzos distribuidos en la frontera.")
-            elif orden == "estado":
-                c.print(tabla_provincias(estado, jugador.id))
-            elif orden == "mapa":
-                c.print(mapa_compacto(estado))
-            elif orden == "auto":
-                self.ia_respaldo.colocar_refuerzos(estado, jugador, pendientes)
-                pendientes = 0
-                c.print("IA: refuerzos colocados automaticamente.")
-            else:
-                c.print("Comandos: colocar <id> <n> | distribuir/pasar | estado | mapa | auto")
+                break
+            i = ids[n - 1]
+            cuantos = _pedir_entero(
+                c,
+                f"Refuerzos en {estado.mapa.territorio(i).nombre} [1..{pendientes}] "
+                f"(ENTER = todos): ",
+                1,
+                pendientes,
+                pendientes,
+            )
+            estado.provincias[i].ejercitos += cuantos
+            pendientes -= cuantos
+            c.print(
+                f"+{cuantos} en {estado.mapa.territorio(i).nombre} "
+                f"(A={estado.provincias[i].ejercitos})"
+            )
+        _pausa(c, "ENTER para pasar a la fase de ataque... ")
 
     # ------------------------------------------------------------------
     # Fase ATAQUE
     # ------------------------------------------------------------------
-    def _detalle_provincia(self, estado: GameState, jugador: Jugador, i: int) -> str:
-        """Describe una provincia del jugador y las acciones disponibles."""
-        prov = estado.provincias[i]
-        t = prov.terreno()
-        lineas = [
-            f"  [{i:>2}] {t.nombre} | A={prov.ejercitos} | P={prov.poblacion:.0f} | "
-            f"H={prov.felicidad:.2f} | tau={prov.impuesto:.0%} | "
-            f"F={prov.fortificacion} | I={prov.infraestructura} | "
-            f"{TERRENO_NOMBRES[t.terreno]}"
-        ]
-        enemigos = estado.vecinos_enemigos_de(i, jugador.id)
-        if enemigos:
-            desc = []
-            for k in enemigos:
-                d = estado.provincias[k]
-                dueno = "Neutral" if d.dueno == NEUTRAL else estado.jugadores[d.dueno].nombre
-                desc.append(f"[{k}] {estado.mapa.territorio(k).nombre} ({dueno}, A={d.ejercitos})")
-            lineas.append("  Enemigos adyacentes: " + " | ".join(desc))
-            lineas.append(f"  Accion: atacar {i} <id enemigo> [1|N|total]")
-        propias = [
-            k for k in estado.mapa.vecinos(i)
-            if estado.provincias[k].dueno == jugador.id
-        ]
-        if propias:
-            desc = [
-                f"[{k}] {estado.mapa.territorio(k).nombre} (A={estado.provincias[k].ejercitos})"
-                for k in propias
-            ]
-            lineas.append("  Provincias propias adyacentes: " + " | ".join(desc))
-        lineas.append(
-            f"  Acciones: reclutar {i} <n> | construir {i} fort|infra | "
-            f"impuesto {i} <tasa>"
-        )
-        return "\n".join(lineas)
-
     def fase_ataque(self, motor: Motor, estado: GameState, jugador: Jugador) -> None:
         c = self.consola
-        c.print(f"\n--- {jugador.nombre} - FASE ATAQUE (0 o mas ataques) ---")
-        c.print("Elige una provincia (escribe su id) para ver sus acciones, "
-                "o 'pasar' para terminar el turno.")
+        c.print(f"\n--- {jugador.nombre} - FASE ATAQUE ---")
         while True:
-            cmd = c.input("[ataque] > ").strip().lower()
-            if not cmd:
-                continue
-            partes = cmd.split()
-            orden = partes[0]
-            if orden == "fin":
-                break
-            elif orden == "pasar":
+            ids = estado.territorios_de(jugador.id)
+            opciones = self._lista_provincias(estado, jugador)
+            opciones.append("Ver mapa completo")
+            opciones.append("Ver detalle de tus provincias")
+            opciones.append("Terminar ataques (pasar a la fase de movimiento)")
+            menu = Menu(
+                c,
+                opciones,
+                titulo="Elige una provincia para ver sus acciones:",
+                opcion_cero="Pasar turno (sin movimiento)",
+                prompt="Provincia: ",
+            )
+            n = menu.elegir()
+            if n == 0:
                 self._pasar_turno = True
-                break
-            elif orden == "auto":
-                self.ia_respaldo.fase_ataque(motor, estado, jugador)
-                break
-            elif orden == "estado":
+                return
+            if n == len(opciones):
+                return  # terminar ataques: sigue la fase de movimiento
+            if n == len(opciones) - 1:
                 c.print(tabla_provincias(estado, jugador.id))
+                _pausa(c)
                 continue
-            elif orden == "mapa":
+            if n == len(opciones) - 2:
                 c.print(mapa_compacto(estado))
+                _pausa(c)
                 continue
-            elif orden == "ayuda":
-                c.print("Comandos: <id> (ver provincia) | atacar <o> <d> [1|N|total] | "
-                        "reclutar <id> <n> | construir <id> fort|infra | "
-                        "impuesto <id> <tasa> | impuestos <tasa> | estado | mapa | "
-                        "auto | fin | pasar")
-                continue
-            elif orden.isdigit():
-                i = int(orden)
-                if i not in estado.provincias:
-                    c.print("Id de provincia fuera de rango")
-                    continue
-                c.print(self._detalle_provincia(estado, jugador, i))
-                continue
-            elif orden == "atacar":
-                if len(partes) < 3:
-                    c.print("Uso: atacar <origen> <destino> [1|N|total]")
-                    continue
-                try:
-                    origen, destino = int(partes[1]), int(partes[2])
-                except ValueError:
-                    c.print("Numeros invalidos")
-                    continue
-                if origen not in estado.provincias or destino not in estado.provincias:
-                    c.print("Id de provincia fuera de rango")
-                    continue
-                modo = partes[3] if len(partes) > 3 else "total"
-                if modo not in ("total", "todo"):
-                    try:
-                        max_rondas = int(modo)
-                    except ValueError:
-                        c.print("Modo invalido: usa 1, N o total")
-                        continue
-                    if max_rondas < 1:
-                        c.print("Numero de rondas invalido")
-                        continue
-                else:
-                    max_rondas = None
-                try:
-                    res = motor.ejecutar_ataque(origen, destino, max_rondas)
-                except ValueError as e:
-                    c.print(f"Error: {e}")
-                    continue
-                c.print(
-                    f"Resultado: {res.rondas} ronda(s), bajas atacante={res.bajas_atacante}, "
-                    f"defensor={res.bajas_defensor}. "
-                    + ("TERRITORIO CONQUISTADO" if res.conquistada else "Defensa resiste")
-                )
-                c.print(
-                    f"Ahora: {estado.mapa.territorio(origen).nombre} A={estado.provincias[origen].ejercitos} | "
-                    f"{estado.mapa.territorio(destino).nombre} A={estado.provincias[destino].ejercitos}"
-                )
-            elif orden == "reclutar":
-                if len(partes) != 3:
-                    c.print("Uso: reclutar <id> <n>")
-                    continue
-                try:
-                    i, n = int(partes[1]), int(partes[2])
-                except ValueError:
-                    c.print("Numeros invalidos")
-                    continue
-                if i not in estado.provincias:
-                    c.print("Id de provincia fuera de rango")
-                    continue
-                ok, msg = economia.reclutar(estado, i, n)
-                c.print(msg if ok else f"Error: {msg}")
-            elif orden == "construir":
-                if len(partes) != 3:
-                    c.print("Uso: construir <id> fort|infra")
-                    continue
-                try:
-                    i = int(partes[1])
-                except ValueError:
-                    c.print("Numero invalido")
-                    continue
-                if i not in estado.provincias:
-                    c.print("Id de provincia fuera de rango")
-                    continue
-                ok, msg = economia.construir(estado, i, partes[2])
-                c.print(msg if ok else f"Error: {msg}")
-            elif orden == "impuesto":
-                if len(partes) != 3:
-                    c.print("Uso: impuesto <id> <tasa 0..0.5>")
-                    continue
-                try:
-                    i, tau = int(partes[1]), float(partes[2])
-                except ValueError:
-                    c.print("Valores invalidos")
-                    continue
-                if i not in estado.provincias:
-                    c.print("Id de provincia fuera de rango")
-                    continue
-                ok, msg = economia.fijar_impuesto(estado, i, tau)
-                c.print(msg if ok else f"Error: {msg}")
-            elif orden == "impuestos":
-                if len(partes) != 2:
-                    c.print("Uso: impuestos <tasa 0..0.5>")
-                    continue
-                try:
-                    tau = float(partes[1])
-                except ValueError:
-                    c.print("Tasa invalida")
-                    continue
-                for i in estado.territorios_de(jugador.id):
-                    economia.fijar_impuesto(estado, i, tau)
-                c.print(f"Impuestos fijados en {tau:.0%} en todas tus provincias.")
-            else:
-                c.print("Comando desconocido (ayuda)")
+            i = ids[n - 1]
+            self._acciones_provincia(motor, estado, jugador, i)
+
+    def _acciones_provincia(self, motor: Motor, estado: GameState, jugador: Jugador, i: int) -> None:
+        c = self.consola
+        while True:
+            prov = estado.provincias[i]
+            c.print(
+                f"\n[{i}] {estado.mapa.territorio(i).nombre} | A={prov.ejercitos} | "
+                f"P={prov.poblacion:.0f} | H={prov.felicidad:.2f} | "
+                f"tau={prov.impuesto:.0%} | F={prov.fortificacion} | I={prov.infraestructura}"
+            )
+            acciones = ["Atacar a una provincia enemiga adyacente",
+                        "Reclutar tropas (cuesta oro y poblacion)",
+                        "Construir fortificacion o infraestructura",
+                        "Cambiar impuesto de esta provincia"]
+            menu = Menu(c, acciones, opcion_cero="Volver", prompt="Accion: ")
+            a = menu.elegir()
+            if a == 0:
+                return
+            if a == 1:
+                self._menu_ataque(motor, estado, jugador, i)
+            elif a == 2:
+                self._menu_reclutar(estado, jugador, i)
+            elif a == 3:
+                self._menu_construir(estado, jugador, i)
+            elif a == 4:
+                self._menu_impuesto(estado, jugador, i)
+
+    def _menu_ataque(self, motor: Motor, estado: GameState, jugador: Jugador, origen: int) -> None:
+        c = self.consola
+        if estado.provincias[origen].ejercitos < 2:
+            c.print("No puedes atacar: se necesitan al menos 2 ejercitos.")
+            _pausa(c)
+            return
+        enemigos = estado.vecinos_enemigos_de(origen, jugador.id)
+        if not enemigos:
+            c.print("No hay enemigos adyacentes a esta provincia.")
+            _pausa(c)
+            return
+        opciones = []
+        for k in enemigos:
+            d = estado.provincias[k]
+            dueno = "Neutral" if d.dueno == NEUTRAL else estado.jugadores[d.dueno].nombre
+            opciones.append(
+                f"[{k}] {estado.mapa.territorio(k).nombre} ({dueno}, A={d.ejercitos})"
+            )
+        menu = Menu(c, opciones, titulo="Objetivos de ataque:",
+                    opcion_cero="Cancelar", prompt="Objetivo: ")
+        n = menu.elegir()
+        if n == 0:
+            return
+        destino = enemigos[n - 1]
+        modos = Menu(
+            c,
+            ["Batalla total (hasta conquista o agotamiento)",
+             "Una sola ronda",
+             "Numero fijo de rondas"],
+            opcion_cero="Cancelar",
+            prompt="Modo: ",
+        )
+        m = modos.elegir()
+        if m == 0:
+            return
+        if m == 1:
+            max_rondas = None
+        elif m == 2:
+            max_rondas = 1
+        else:
+            max_rondas = _pedir_entero(c, "Numero de rondas [1..20] (ENTER = 3): ", 1, 20, 3)
+        try:
+            res = motor.ejecutar_ataque(origen, destino, max_rondas)
+        except ValueError as e:
+            c.print(f"Error: {e}")
+            _pausa(c)
+            return
+        c.print(
+            f"Resultado: {res.rondas} ronda(s), bajas atacante={res.bajas_atacante}, "
+            f"defensor={res.bajas_defensor}. "
+            + ("TERRITORIO CONQUISTADO" if res.conquistada else "Defensa resiste")
+        )
+        c.print(
+            f"Ahora: {estado.mapa.territorio(origen).nombre} A={estado.provincias[origen].ejercitos} | "
+            f"{estado.mapa.territorio(destino).nombre} A={estado.provincias[destino].ejercitos}"
+        )
+        _pausa(c)
+
+    def _menu_reclutar(self, estado: GameState, jugador: Jugador, i: int) -> None:
+        c = self.consola
+        prov = estado.provincias[i]
+        maximo = min(int(jugador.tesoro // estado.config.c_recl), int(prov.poblacion))
+        if maximo < 1:
+            c.print("Sin recursos: oro insuficiente o poblacion baja.")
+            _pausa(c)
+            return
+        n = _pedir_entero(
+            c,
+            f"Soldados a reclutar en {estado.mapa.territorio(i).nombre} "
+            f"[1..{maximo}] (ENTER = {maximo}): ",
+            1, maximo, maximo,
+        )
+        costo = n * estado.config.c_recl
+        if not _confirmar(c, f"Reclutar {n} soldados por {costo:.1f} oro? (ENTER=si, 0=no): "):
+            c.print("Reclutamiento cancelado.")
+            return
+        ok, msg = economia.reclutar(estado, i, n)
+        c.print(msg if ok else f"Error: {msg}")
+        _pausa(c)
+
+    def _menu_construir(self, estado: GameState, jugador: Jugador, i: int) -> None:
+        c = self.consola
+        prov = estado.provincias[i]
+        cfg = estado.config
+        opciones = []
+        costos: list[float | None] = []
+        if prov.fortificacion < cfg.nivel_max_fort:
+            costo = cfg.c_fort[prov.fortificacion + 1] - cfg.c_fort[prov.fortificacion]
+            opciones.append(
+                f"Fortificacion (nivel {prov.fortificacion} -> {prov.fortificacion + 1}, "
+                f"cuesta {costo:.0f} oro)"
+            )
+            costos.append(costo)
+        else:
+            opciones.append("Fortificacion al nivel maximo")
+            costos.append(None)
+        if prov.infraestructura < cfg.nivel_max_infra:
+            costo = cfg.c_infra[prov.infraestructura + 1] - cfg.c_infra[prov.infraestructura]
+            opciones.append(
+                f"Infraestructura (nivel {prov.infraestructura} -> {prov.infraestructura + 1}, "
+                f"cuesta {costo:.0f} oro)"
+            )
+            costos.append(costo)
+        else:
+            opciones.append("Infraestructura al nivel maximo")
+            costos.append(None)
+        menu = Menu(c, opciones, opcion_cero="Cancelar", prompt="Construccion: ")
+        n = menu.elegir()
+        if n == 0:
+            return
+        if costos[n - 1] is None:
+            c.print("Ya esta al nivel maximo.")
+            _pausa(c)
+            return
+        if not _confirmar(c, "Construir? (ENTER=si, 0=no): "):
+            c.print("Construccion cancelada.")
+            return
+        tipo = "fort" if n == 1 else "infra"
+        ok, msg = economia.construir(estado, i, tipo)
+        c.print(msg if ok else f"Error: {msg}")
+        _pausa(c)
+
+    def _menu_impuesto(self, estado: GameState, jugador: Jugador, i: int) -> None:
+        c = self.consola
+        prov = estado.provincias[i]
+        tasas = [0.10, 0.20, 0.30, 0.40, 0.50]
+        menu = Menu(
+            c,
+            [f"{int(t * 100)}%" for t in tasas],
+            titulo=f"Impuesto actual de {estado.mapa.territorio(i).nombre}: "
+                   f"{prov.impuesto:.0%}",
+            opcion_cero="Cancelar",
+            prompt="Nueva tasa: ",
+        )
+        n = menu.elegir()
+        if n == 0:
+            return
+        ok, msg = economia.fijar_impuesto(estado, i, tasas[n - 1])
+        c.print(msg if ok else f"Error: {msg}")
+        _pausa(c)
 
     # ------------------------------------------------------------------
     # Fase MOVIMIENTO (un unico movimiento)
@@ -389,41 +509,69 @@ class ControladorHumano(ControladorJugador):
     def fase_movimiento(self, motor: Motor, estado: GameState, jugador: Jugador) -> None:
         c = self.consola
         if self._pasar_turno:
-            # El jugador eligio pasar de turno en la fase de ataque
+            # El jugador eligio pasar turno en la fase de ataque
             return
-        c.print(f"\n--- {jugador.nombre} - FASE MOVIMIENTO (un unico movimiento) ---")
-        c.print(tabla_provincias(estado, jugador.id))
-        while True:
-            cmd = c.input("[movimiento] > ").strip().lower()
-            if not cmd:
-                continue
-            partes = cmd.split()
-            if partes[0] in ("fin", "pasar"):
-                break
-            if partes[0] == "auto":
-                self.ia_respaldo.fase_movimiento(motor, estado, jugador)
-                break
-            if partes[0] == "estado":
-                c.print(tabla_provincias(estado, jugador.id))
-                continue
-            if partes[0] in ("mover", "mov") and len(partes) == 4:
-                try:
-                    origen, destino, n = int(partes[1]), int(partes[2]), int(partes[3])
-                except ValueError:
-                    c.print("Numeros invalidos")
-                    continue
-                if origen not in estado.provincias or destino not in estado.provincias:
-                    c.print("Id de provincia fuera de rango")
-                    continue
-                try:
-                    motor.ejecutar_movimiento(origen, destino, n)
-                    c.print(f"Movidas {n} tropas de {estado.mapa.territorio(origen).nombre} "
-                            f"a {estado.mapa.territorio(destino).nombre}.")
-                    break  # el movimiento es unico (Seccion 2.6)
-                except ValueError as e:
-                    c.print(f"Error: {e}")
-            else:
-                c.print("Comandos: mover <origen> <destino> <n> | estado | auto | fin/pasar")
+        c.print(f"\n--- {jugador.nombre} - FASE MOVIMIENTO (unico, opcional) ---")
+        ids = estado.territorios_de(jugador.id)
+        lineas = self._lista_provincias(estado, jugador)
+        candidatos = [
+            (ids[k], lineas[k])
+            for k in range(len(ids))
+            if estado.provincias[ids[k]].ejercitos >= 2
+        ]
+        if not candidatos:
+            c.print("Ninguna provincia tiene tropas suficientes para mover.")
+            _pausa(c)
+            return
+        menu = Menu(
+            c,
+            [texto for _, texto in candidatos],
+            titulo="Origen del movimiento (provincias con tropas disponibles):",
+            opcion_cero="Pasar sin mover",
+            prompt="Origen: ",
+        )
+        n = menu.elegir()
+        if n == 0:
+            return
+        origen = candidatos[n - 1][0]
+        destinos = [
+            k for k in estado.mapa.vecinos(origen)
+            if estado.provincias[k].dueno == jugador.id
+        ]
+        if not destinos:
+            c.print("Esa provincia no tiene provincias propias adyacentes.")
+            _pausa(c)
+            return
+        opciones_d = [
+            f"[{k}] {estado.mapa.territorio(k).nombre} (A={estado.provincias[k].ejercitos})"
+            for k in destinos
+        ]
+        menu_d = Menu(c, opciones_d, opcion_cero="Cancelar", prompt="Destino: ")
+        m = menu_d.elegir()
+        if m == 0:
+            return
+        destino = destinos[m - 1]
+        maximo = estado.provincias[origen].ejercitos - 1
+        n_tropas = _pedir_entero(
+            c,
+            f"Cantidad de tropas [1..{maximo}] (ENTER = todas): ",
+            1, maximo, maximo,
+        )
+        if not _confirmar(
+            c,
+            f"Mover {n_tropas} tropas de {estado.mapa.territorio(origen).nombre} a "
+            f"{estado.mapa.territorio(destino).nombre}? (ENTER=si, 0=no): ",
+        ):
+            c.print("Movimiento cancelado.")
+            return
+        try:
+            motor.ejecutar_movimiento(origen, destino, n_tropas)
+            c.print(f"Movidas {n_tropas} tropas.")
+        except ValueError as e:
+            c.print(f"Error: {e}")
+        _pausa(c)
+
+
 
 
 # ---------------------------------------------------------------------------
