@@ -259,6 +259,7 @@ class ControladorHumano(ControladorJugador):
         c = self.consola
         self._pasar_turno = False
         c.print(f"\n=== TURNO {estado.turno} - {jugador.nombre.upper()} - FASE REFUERZO ===")
+        c.print(mapa_compacto(estado))
         c.print(f"Recibes {cantidad} refuerzos (max(3, territorios/3) + bonus de continentes).")
 
         pendientes = cantidad
@@ -306,10 +307,10 @@ class ControladorHumano(ControladorJugador):
     def fase_ataque(self, motor: Motor, estado: GameState, jugador: Jugador) -> None:
         c = self.consola
         c.print(f"\n--- {jugador.nombre} - FASE ATAQUE ---")
+        c.print(mapa_compacto(estado))
         while True:
             ids = estado.territorios_de(jugador.id)
             opciones = self._lista_provincias(estado, jugador)
-            opciones.append("Ver mapa completo")
             opciones.append("Ver detalle de tus provincias")
             opciones.append("Terminar ataques (pasar a la fase de movimiento)")
             menu = Menu(
@@ -327,10 +328,6 @@ class ControladorHumano(ControladorJugador):
                 return  # terminar ataques: sigue la fase de movimiento
             if n == len(opciones) - 1:
                 c.print(tabla_provincias(estado, jugador.id))
-                _pausa(c)
-                continue
-            if n == len(opciones) - 2:
-                c.print(mapa_compacto(estado))
                 _pausa(c)
                 continue
             i = ids[n - 1]
@@ -512,6 +509,7 @@ class ControladorHumano(ControladorJugador):
             # El jugador eligio pasar turno en la fase de ataque
             return
         c.print(f"\n--- {jugador.nombre} - FASE MOVIMIENTO (unico, opcional) ---")
+        c.print(mapa_compacto(estado))
         ids = estado.territorios_de(jugador.id)
         lineas = self._lista_provincias(estado, jugador)
         candidatos = [
