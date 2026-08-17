@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 
 from . import economia
 from .combate import ResultadoBatalla, ataque_viable, batalla
-from .config import CONFIG, Config
+from .config import Config
 from .estado import (
     FASE_ATAQUE,
     FASE_FIN_TURNO,

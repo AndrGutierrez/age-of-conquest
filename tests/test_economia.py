@@ -213,7 +213,8 @@ class TestRebelionAplicada(MapaParcheadoTestCase):
         rebeldes = economia.comprobar_rebeliones(s, random.Random(1))
         self.assertIn(0, rebeldes)
         self.assertEqual(prov.dueno, NEUTRAL)
-        self.assertEqual(prov.ejercitos, s.config.guarnicion_neutral)
+        # la milicia conserva parte de los efectivos (tope milicia_max)
+        self.assertEqual(prov.ejercitos, s.config.milicia_max)
         self.assertEqual(prov.impuesto, 0.0)
 
     def test_felicidad_alta_nunca_se_rebela(self):

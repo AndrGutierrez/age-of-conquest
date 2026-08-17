@@ -123,6 +123,7 @@ class Config:
     felicidad_inicial: float = 0.80  # felicidad inicial de cada provincia
     ejercitos_iniciales: int = 3     # tropas por provincia al repartir el mapa
     guarnicion_neutral: int = 2      # milicias de una provincia rebelde/neutral
+    milicia_max: int = 6             # tope de milicias conservadas al rebelarse
 
     #: niveles maximos de construccion (len(c_fort) - 1 y len(c_infra) - 1)
     @property

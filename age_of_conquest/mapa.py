@@ -1,13 +1,16 @@
-"""Datos estaticos del mapa: el grafo de adyacencia y los continentes.
+"""Datos estaticos del mapa: Europa dividida en 42 provincias historicas.
 
-Se utiliza el mapa clasico de 42 territorios (estilo Risk), que es el que
-sugiere el documento ("Sudamerica = 2, Europa = 5" en la Seccion 1.5.2).
-El grafo G = (V, E) es no dirigido: (i, k) in E si i y k comparten frontera.
+El mapa corresponde al escenario principal del juego (Europa) y esta
+particionado en 11 regiones ("continentes") que otorgan bonificaciones por
+control total, analogas a los continentes del modelo formal:
 
-Cada territorio tiene un tipo de terreno sigma(i) en
-{0: Llano, 1: Bosque, 2: Montana, 3: Desierto}; la asignacion por territorio
-es una decision de diseno (el documento no la especifica) coherente con la
-geografia real: Sahara = Desierto, Ural = Montana, Amazonia = Bosque, etc.
+    Britania, Galia, Iberia, Italia, Germania, Norte de Africa, Balcanes,
+    Grecia, Anatolia, Oriente y Europa del Este.
+
+El grafo G = (V, E) es no dirigido: (i, k) in E si i y k comparten
+frontera (terrestre o maritima navegable, como en el juego de referencia).
+Cada provincia tiene un tipo de terreno sigma(i) en
+{0: Llano, 1: Bosque, 2: Montana, 3: Desierto} asignado segun su geografia.
 """
 
 from __future__ import annotations
@@ -21,41 +24,54 @@ from .config import (
     TERRENO_MONTANA,
 )
 
-# Identificadores de continentes (indices 0..5)
-AMERICA_NORTE = 0
-AMERICA_SUR = 1
-EUROPA = 2
-AFRICA = 3
-ASIA = 4
-OCEANIA = 5
+# Identificadores de regiones (indices 0..10)
+BRITANIA = 0
+GALIA = 1
+IBERIA = 2
+ITALIA = 3
+GERMANIA = 4
+NORTE_AFRICA = 5
+BALCANES = 6
+GRECIA = 7
+ANATOLIA = 8
+ORIENTE = 9
+EUROPA_ESTE = 10
 
-CONTINENTE_NOMBRES = {
-    AMERICA_NORTE: "America del Norte",
-    AMERICA_SUR: "America del Sur",
-    EUROPA: "Europa",
-    AFRICA: "Africa",
-    ASIA: "Asia",
-    OCEANIA: "Oceania",
+REGION_NOMBRES = {
+    BRITANIA: "Britania",
+    GALIA: "Galia",
+    IBERIA: "Iberia",
+    ITALIA: "Italia",
+    GERMANIA: "Germania",
+    NORTE_AFRICA: "Norte de Africa",
+    BALCANES: "Balcanes",
+    GRECIA: "Grecia",
+    ANATOLIA: "Anatolia",
+    ORIENTE: "Oriente",
+    EUROPA_ESTE: "Europa del Este",
 }
 
-# Bonificaciones clasicas por control total del continente (Seccion 1.5.2).
-# b_c = soldados/turno adicionales; b_oro_c = oro/turno (Seccion 2.1.4).
-CONTINENTE_BONUS_SOLDADOS = {
-    AMERICA_NORTE: 5,
-    AMERICA_SUR: 2,
-    EUROPA: 5,
-    AFRICA: 3,
-    ASIA: 7,
-    OCEANIA: 2,
+# Bonificaciones por control total de la region.
+# b_c = soldados/turno (Seccion 1.5.2); b_oro_c = oro/turno (Seccion 2.1.4).
+REGION_BONUS_SOLDADOS = {
+    BRITANIA: 2,
+    GALIA: 3,
+    IBERIA: 3,
+    ITALIA: 4,
+    GERMANIA: 3,
+    NORTE_AFRICA: 3,
+    BALCANES: 3,
+    GRECIA: 2,
+    ANATOLIA: 3,
+    ORIENTE: 4,
+    EUROPA_ESTE: 2,
 }
-CONTINENTE_BONUS_ORO = {
-    AMERICA_NORTE: 15,
-    AMERICA_SUR: 6,
-    EUROPA: 15,
-    AFRICA: 9,
-    ASIA: 21,
-    OCEANIA: 6,
-}
+REGION_BONUS_ORO = {c: 3 * v for c, v in REGION_BONUS_SOLDADOS.items()}
+
+# Aliases con los nombres usados por el resto del codigo
+CONTINENTE_NOMBRES = REGION_NOMBRES
+CONTINENTE_BONUS_SOLDADOS = REGION_BONUS_SOLDADOS
+CONTINENTE_BONUS_ORO = REGION_BONUS_ORO
 
 
 @dataclass(frozen=True)
@@ -64,110 +80,114 @@ class Territorio:
 
     id: int              # i: indice unico 0..N-1
     nombre: str          # nombre para mostrar
-    continente: int      # continente al que pertenece
+    continente: int      # region a la que pertenece
     terreno: int         # sigma(i): 0 Llano, 1 Bosque, 2 Montana, 3 Desierto
 
 
 # ---------------------------------------------------------------------------
-# Definicion del mapa clasico (42 territorios)
+# Definicion del mapa de Europa (42 provincias, 11 regiones)
 # ---------------------------------------------------------------------------
 
-# Definicion completa y explicita (mas legible que una tabla comprimida).
 _PROVINCIAS: list[Territorio] = [
-    # America del Norte
-    Territorio(0, "Alaska", AMERICA_NORTE, TERRENO_BOSQUE),
-    Territorio(1, "Territorio del Noroeste", AMERICA_NORTE, TERRENO_BOSQUE),
-    Territorio(2, "Groenlandia", AMERICA_NORTE, TERRENO_MONTANA),
-    Territorio(3, "Alberta", AMERICA_NORTE, TERRENO_LLANO),
-    Territorio(4, "Ontario", AMERICA_NORTE, TERRENO_BOSQUE),
-    Territorio(5, "Quebec", AMERICA_NORTE, TERRENO_BOSQUE),
-    Territorio(6, "Oeste de EE.UU.", AMERICA_NORTE, TERRENO_DESIERTO),
-    Territorio(7, "Este de EE.UU.", AMERICA_NORTE, TERRENO_LLANO),
-    Territorio(8, "America Central", AMERICA_NORTE, TERRENO_BOSQUE),
-    # America del Sur (4 territorios, bonus 2)
-    Territorio(9, "Venezuela", AMERICA_SUR, TERRENO_BOSQUE),
-    Territorio(10, "Peru", AMERICA_SUR, TERRENO_MONTANA),
-    Territorio(11, "Brasil", AMERICA_SUR, TERRENO_BOSQUE),
-    Territorio(12, "Argentina", AMERICA_SUR, TERRENO_LLANO),
-    # Europa (7 territorios, bonus 5)
-    Territorio(13, "Islandia", EUROPA, TERRENO_MONTANA),
-    Territorio(14, "Gran Bretana", EUROPA, TERRENO_LLANO),
-    Territorio(15, "Escandinavia", EUROPA, TERRENO_BOSQUE),
-    Territorio(16, "Ucrania", EUROPA, TERRENO_LLANO),
-    Territorio(17, "Europa Occidental", EUROPA, TERRENO_LLANO),
-    Territorio(18, "Europa Septentrional", EUROPA, TERRENO_LLANO),
-    Territorio(19, "Europa Meridional", EUROPA, TERRENO_LLANO),
-    # Africa (6 territorios, bonus 3)
-    Territorio(20, "Norte de Africa", AFRICA, TERRENO_DESIERTO),
-    Territorio(21, "Egipto", AFRICA, TERRENO_DESIERTO),
-    Territorio(22, "Africa Oriental", AFRICA, TERRENO_DESIERTO),
-    Territorio(23, "Congo", AFRICA, TERRENO_BOSQUE),
-    Territorio(24, "Sudafrica", AFRICA, TERRENO_LLANO),
-    Territorio(25, "Madagascar", AFRICA, TERRENO_BOSQUE),
-    # Asia (12 territorios, bonus 7)
-    Territorio(26, "Ural", ASIA, TERRENO_MONTANA),
-    Territorio(27, "Siberia", ASIA, TERRENO_BOSQUE),
-    Territorio(28, "Yakutsk", ASIA, TERRENO_LLANO),
-    Territorio(29, "Kamchatka", ASIA, TERRENO_MONTANA),
-    Territorio(30, "Irkutsk", ASIA, TERRENO_BOSQUE),
-    Territorio(31, "Mongolia", ASIA, TERRENO_DESIERTO),
-    Territorio(32, "Japon", ASIA, TERRENO_MONTANA),
-    Territorio(33, "Afganistan", ASIA, TERRENO_MONTANA),
-    Territorio(34, "China", ASIA, TERRENO_LLANO),
-    Territorio(35, "Oriente Medio", ASIA, TERRENO_DESIERTO),
-    Territorio(36, "India", ASIA, TERRENO_BOSQUE),
-    Territorio(37, "Siam", ASIA, TERRENO_BOSQUE),
-    # Oceania (4 territorios, bonus 2)
-    Territorio(38, "Indonesia", OCEANIA, TERRENO_BOSQUE),
-    Territorio(39, "Nueva Guinea", OCEANIA, TERRENO_BOSQUE),
-    Territorio(40, "Australia Occidental", OCEANIA, TERRENO_DESIERTO),
-    Territorio(41, "Australia Oriental", OCEANIA, TERRENO_LLANO),
+    # Britania (3 provincias, bonus 2)
+    Territorio(0, "Britania", BRITANIA, TERRENO_LLANO),
+    Territorio(1, "Caledonia", BRITANIA, TERRENO_MONTANA),
+    Territorio(2, "Hibernia", BRITANIA, TERRENO_BOSQUE),
+    # Galia (4 provincias, bonus 3)
+    Territorio(3, "Armorica", GALIA, TERRENO_LLANO),
+    Territorio(4, "Galia Celtica", GALIA, TERRENO_LLANO),
+    Territorio(5, "Galia Belgica", GALIA, TERRENO_BOSQUE),
+    Territorio(6, "Narbonense", GALIA, TERRENO_LLANO),
+    # Iberia (4 provincias, bonus 3)
+    Territorio(7, "Tarraconense", IBERIA, TERRENO_MONTANA),
+    Territorio(8, "Lusitania", IBERIA, TERRENO_LLANO),
+    Territorio(9, "Betica", IBERIA, TERRENO_LLANO),
+    Territorio(10, "Cartaginense", IBERIA, TERRENO_LLANO),
+    # Italia (4 provincias, bonus 4)
+    Territorio(11, "Galia Cisalpina", ITALIA, TERRENO_LLANO),
+    Territorio(12, "Roma", ITALIA, TERRENO_LLANO),
+    Territorio(13, "Magna Grecia", ITALIA, TERRENO_LLANO),
+    Territorio(14, "Sicilia", ITALIA, TERRENO_MONTANA),
+    # Germania (4 provincias, bonus 3)
+    Territorio(15, "Germania Inferior", GERMANIA, TERRENO_BOSQUE),
+    Territorio(16, "Germania Superior", GERMANIA, TERRENO_BOSQUE),
+    Territorio(17, "Retia", GERMANIA, TERRENO_MONTANA),
+    Territorio(18, "Noricum", GERMANIA, TERRENO_BOSQUE),
+    # Norte de Africa (4 provincias, bonus 3)
+    Territorio(19, "Mauritania", NORTE_AFRICA, TERRENO_DESIERTO),
+    Territorio(20, "Numidia", NORTE_AFRICA, TERRENO_DESIERTO),
+    Territorio(21, "Cartago", NORTE_AFRICA, TERRENO_LLANO),
+    Territorio(22, "Cirenaica", NORTE_AFRICA, TERRENO_DESIERTO),
+    # Balcanes (4 provincias, bonus 3)
+    Territorio(23, "Iliria", BALCANES, TERRENO_BOSQUE),
+    Territorio(24, "Dacia", BALCANES, TERRENO_BOSQUE),
+    Territorio(25, "Tracia", BALCANES, TERRENO_LLANO),
+    Territorio(26, "Macedonia", BALCANES, TERRENO_MONTANA),
+    # Grecia (3 provincias, bonus 2)
+    Territorio(27, "Epiro", GRECIA, TERRENO_MONTANA),
+    Territorio(28, "Grecia", GRECIA, TERRENO_LLANO),
+    Territorio(29, "Creta", GRECIA, TERRENO_LLANO),
+    # Anatolia (4 provincias, bonus 3)
+    Territorio(30, "Bitinia", ANATOLIA, TERRENO_LLANO),
+    Territorio(31, "Galacia", ANATOLIA, TERRENO_BOSQUE),
+    Territorio(32, "Capadocia", ANATOLIA, TERRENO_MONTANA),
+    Territorio(33, "Cilicia", ANATOLIA, TERRENO_LLANO),
+    # Oriente (5 provincias, bonus 4)
+    Territorio(34, "Siria", ORIENTE, TERRENO_LLANO),
+    Territorio(35, "Fenicia", ORIENTE, TERRENO_LLANO),
+    Territorio(36, "Mesopotamia", ORIENTE, TERRENO_DESIERTO),
+    Territorio(37, "Egipto", ORIENTE, TERRENO_DESIERTO),
+    Territorio(38, "Arabia", ORIENTE, TERRENO_DESIERTO),
+    # Europa del Este (3 provincias, bonus 2)
+    Territorio(39, "Sarmacia", EUROPA_ESTE, TERRENO_LLANO),
+    Territorio(40, "Escitia", EUROPA_ESTE, TERRENO_DESIERTO),
+    Territorio(41, "Germania Oriental", EUROPA_ESTE, TERRENO_BOSQUE),
 ]
 
 #: Grafo de adyacencia no dirigido: id -> lista de ids vecinos.
 ADYACENCIAS: dict[int, list[int]] = {
-    0: [1, 3, 29],                       # Alaska
-    1: [0, 3, 4, 2],                     # T. del Noroeste
-    2: [1, 4, 5, 13],                    # Groenlandia
-    3: [0, 1, 4, 6],                     # Alberta
-    4: [1, 2, 3, 5, 6, 7],               # Ontario
-    5: [2, 4, 7],                        # Quebec
-    6: [3, 4, 7, 8],                     # Oeste de EE.UU.
-    7: [4, 5, 6, 8],                     # Este de EE.UU.
-    8: [6, 7, 9],                        # America Central
-    9: [8, 10, 11],                      # Venezuela
-    10: [9, 11, 12],                     # Peru
-    11: [9, 10, 12, 20],                 # Brasil
-    12: [10, 11],                        # Argentina
-    13: [2, 14, 15],                     # Islandia
-    14: [13, 15, 17, 18],                # Gran Bretana
-    15: [13, 14, 16, 18],                # Escandinavia
-    16: [15, 18, 19, 26, 33, 35],        # Ucrania
-    17: [14, 18, 19, 20],                # Europa Occidental
-    18: [14, 15, 16, 17, 19],            # Europa Septentrional
-    19: [16, 17, 18, 20, 21, 35],        # Europa Meridional
-    20: [11, 17, 19, 21, 22, 23],        # Norte de Africa
-    21: [19, 20, 22, 35],                # Egipto
-    22: [20, 21, 23, 24, 25, 35],        # Africa Oriental
-    23: [20, 22, 24],                    # Congo
-    24: [22, 23, 25],                    # Sudafrica
-    25: [22, 24],                        # Madagascar
-    26: [16, 27, 33, 34, 35],            # Ural
-    27: [26, 28, 30, 31, 34],            # Siberia
-    28: [27, 29, 30],                    # Yakutsk
-    29: [0, 28, 30, 31, 32],             # Kamchatka
-    30: [27, 28, 29, 31],                # Irkutsk
-    31: [27, 29, 30, 32, 34],            # Mongolia
-    32: [29, 31],                        # Japon
-    33: [16, 26, 34, 35, 36],            # Afganistan
-    34: [26, 27, 31, 33, 36, 37],        # China
-    35: [16, 19, 21, 22, 26, 33, 36],    # Oriente Medio
-    36: [33, 34, 35, 37],                # India
-    37: [34, 36, 38],                    # Siam
-    38: [37, 39, 40],                    # Indonesia
-    39: [38, 40, 41],                    # Nueva Guinea
-    40: [38, 39, 41],                    # Australia Occidental
-    41: [39, 40],                        # Australia Oriental
+    0: [1, 2, 3, 5],                       # Britania
+    1: [0],                                # Caledonia
+    2: [0],                                # Hibernia
+    3: [0, 4],                             # Armorica
+    4: [3, 5, 6, 11, 16],                  # Galia Celtica
+    5: [0, 4, 15],                         # Galia Belgica
+    6: [4, 7, 10, 12, 16],                 # Narbonense
+    7: [6, 8, 10],                         # Tarraconense
+    8: [7, 9, 10],                         # Lusitania
+    9: [8, 10, 19, 21],                    # Betica
+    10: [6, 7, 8, 9, 21],                  # Cartaginense
+    11: [4, 12, 16, 17, 18],                # Galia Cisalpina
+    12: [6, 11, 13, 14],                   # Roma
+    13: [12, 14, 23, 26],                  # Magna Grecia
+    14: [12, 13, 21],                      # Sicilia
+    15: [5, 16, 41],                       # Germania Inferior
+    16: [4, 6, 11, 15, 17, 41],            # Germania Superior
+    17: [16, 11, 18],                      # Retia
+    18: [11, 17, 23, 24],                  # Noricum
+    19: [9, 20],                           # Mauritania
+    20: [19, 21],                          # Numidia
+    21: [9, 10, 14, 20, 22],               # Cartago
+    22: [21, 29, 37],                      # Cirenaica
+    23: [13, 18, 24, 26, 27],              # Iliria
+    24: [18, 23, 25, 39],                  # Dacia
+    25: [24, 26, 27, 30],                  # Tracia
+    26: [13, 23, 25, 27, 28],              # Macedonia
+    27: [23, 25, 26, 28],                  # Epiro
+    28: [26, 27, 29, 30],                  # Grecia
+    29: [22, 28, 30],                      # Creta
+    30: [25, 28, 29, 31, 33, 40],          # Bitinia
+    31: [30, 32, 33],                      # Galacia
+    32: [31, 33, 34],                      # Capadocia
+    33: [30, 31, 32, 34, 35],              # Cilicia
+    34: [32, 33, 35, 36],                  # Siria
+    35: [33, 34, 36, 37],                  # Fenicia
+    36: [34, 35, 38],                      # Mesopotamia
+    37: [22, 35, 38],                      # Egipto
+    38: [36, 37],                          # Arabia
+    39: [24, 40, 41],                      # Sarmacia
+    40: [30, 39, 41],                      # Escitia
+    41: [15, 16, 39, 40],                  # Germania Oriental
 }
 
 
@@ -181,7 +201,7 @@ class Mapa:
         self.adyacencias: dict[int, list[int]] = {
             k: list(v) for k, v in ADYACENCIAS.items()
         }
-        #: territorios de cada continente: continente -> lista de ids
+        #: territorios de cada region: region -> lista de ids
         self.territorios_continente: dict[int, list[int]] = {}
         for t in self.territorios:
             self.territorios_continente.setdefault(t.continente, []).append(t.id)

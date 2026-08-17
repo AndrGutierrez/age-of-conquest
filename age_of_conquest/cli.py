@@ -19,36 +19,12 @@ from __future__ import annotations
 import random
 
 from . import economia
-from .config import CONFIG, Config, TERRENO_NOMBRES
-from .estado import (
-    NEUTRAL,
-    PERFIL_AGRESIVO,
-    PERFIL_DEFENSIVO,
-    PERFIL_EQUILIBRADO,
-    PERFIL_HUMANO,
-    GameState,
-    Jugador,
-    Provincia,
-)
+from .config import Config, TERRENO_NOMBRES
+from .escenarios import ESCENARIOS, aplicar_escenario, crear_controladores
+from .estado import NEUTRAL, GameState, Jugador
 from .ia import ControladorIA
 from .mapa import CONTINENTE_BONUS_SOLDADOS, CONTINENTE_NOMBRES, MAPA
 from .motor import FASE_REFUERZO, PRIO_REFUERZO, ControladorJugador, Motor
-
-#: Perfiles y nombres de los imperios de la partida estandar
-IMPERIOS = [
-    ("Tu Imperio", PERFIL_HUMANO, True),
-    ("Imperio Rojo", PERFIL_AGRESIVO, False),
-    ("Imperio Azul", PERFIL_DEFENSIVO, False),
-    ("Imperio Verde", PERFIL_EQUILIBRADO, False),
-]
-
-#: Imperios de la demo automatica (todos IA)
-IMPERIOS_DEMO = [
-    ("Imperio Rojo", PERFIL_AGRESIVO, False),
-    ("Imperio Azul", PERFIL_DEFENSIVO, False),
-    ("Imperio Verde", PERFIL_EQUILIBRADO, False),
-    ("Imperio Dorado", PERFIL_EQUILIBRADO, False),
-]
 
 
 class Consola:
@@ -63,28 +39,25 @@ class Consola:
 
 def crear_partida(
     seed: int | None = None,
-    imperios: list[tuple[str, str, bool]] | None = None,
+    escenario: str = "roma",
+    todos_ia: bool = False,
     config: Config | None = None,
-) -> tuple[GameState, Motor]:
+) -> tuple[GameState, Motor, str]:
     """Prepara el estado y el motor de una partida nueva.
 
-    El reparto de territorios y la programacion del primer REFUERZO la
-    realiza Motor.iniciar() / _repartir_mapa(). Aqui solo se crean los
-    jugadores y sus controladores.
+    Aplica el escenario historico indicado (imperios y territorios
+    iniciales fijos, sin reparto aleatorio) y devuelve (estado, motor,
+    nombre del escenario). Si todos_ia es True, todos los imperios son
+    controlados por la IA (modo demo).
     """
+    esc = ESCENARIOS[escenario]
     estado = GameState(config)
     estado.inicializar_provincias()
-    imperios = imperios or IMPERIOS
-    controladores: dict[int, ControladorJugador] = {}
-    for nombre, perfil, humano in imperios:
-        j = estado.crear_jugador(nombre, perfil=perfil, humano=humano)
-        if humano:
-            controladores[j.id] = ControladorHumano()
-        else:
-            controladores[j.id] = ControladorIA()
+    aplicar_escenario(estado, esc, todos_ia=todos_ia)
+    controladores = crear_controladores(estado, ControladorIA, ControladorHumano)
     rng = random.Random(seed)
     motor = Motor(estado, controladores, rng)
-    return estado, motor
+    return estado, motor, esc.nombre
 
 
 # ---------------------------------------------------------------------------
@@ -386,18 +359,20 @@ class ControladorHumano(ControladorJugador):
 def partida_interactiva(
     seed: int | None = None,
     max_turnos: int | None = None,
+    escenario: str = "roma",
     consola: Consola | None = None,
 ) -> None:
-    """Partida estandar: 1 humano contra 3 imperios IA."""
+    """Partida estandar: el imperio principal del escenario (humano) contra
+    los demas imperios historicos (IA)."""
     c = consola or Consola()
-    estado, motor = crear_partida(seed=seed)
-    # Reparto manual: se reparte antes de iniciar la LEF para que el
-    # humano vea su imperio desde el primer REFUERZO.
-    motor._repartir_mapa()
+    estado, motor, nombre_esc = crear_partida(seed=seed, escenario=escenario)
+    # La distribucion de territorios es fija (escenario); solo se programa
+    # el primer REFUERZO de la LEF.
     motor._programar(FASE_REFUERZO, estado.jugadores_activos()[0], PRIO_REFUERZO)
 
     c.print("=" * 70)
     c.print("  AGE OF CONQUEST - MOTOR DE SIMULACION (proyecto SIMUSIST)")
+    c.print(f"  Escenario: {nombre_esc} ({ESCENARIOS[escenario].epoca})")
     c.print("=" * 70)
     c.print(tabla_general(estado))
     c.print("Comandos durante tu turno: consulta 'ayuda' en la fase de ataque.")
@@ -429,15 +404,22 @@ def partida_interactiva(
         c.print(f"\nPartida detenida en el turno {estado.turno} (limite alcanzado).")
 
 
-def partida_demo(seed: int | None = None, max_turnos: int = 5, consola: Consola | None = None) -> None:
-    """Demo automatica: todos los jugadores son IA durante n turnos."""
+def partida_demo(
+    seed: int | None = None,
+    max_turnos: int = 5,
+    escenario: str = "roma",
+    consola: Consola | None = None,
+) -> None:
+    """Demo automatica: todos los imperios del escenario son IA."""
     c = consola or Consola()
-    estado, motor = crear_partida(seed=seed, imperios=IMPERIOS_DEMO)
-    motor._repartir_mapa()
+    estado, motor, nombre_esc = crear_partida(
+        seed=seed, escenario=escenario, todos_ia=True
+    )
     motor._programar(FASE_REFUERZO, estado.jugadores_activos()[0], PRIO_REFUERZO)
 
     c.print("=" * 70)
     c.print("  AGE OF CONQUEST - DEMO AUTOMATICA (todos los imperios son IA)")
+    c.print(f"  Escenario: {nombre_esc} ({ESCENARIOS[escenario].epoca})")
     c.print("=" * 70)
     c.print(tabla_general(estado))
     c.print(f"\nEjecutando {max_turnos} turnos con IA...\n")

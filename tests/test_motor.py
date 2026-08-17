@@ -85,14 +85,15 @@ class TestRefuerzos(MotorTestCase):
         self.estado.provincias[3].dueno = 1  # 4 territorios -> 4//3 = 1 -> 3
 
     def test_formula_bonus_continente(self):
-        # En el mapa real: poseer toda Oceania (4 territorios) suma b_c = 2
+        # En el mapa real de Europa: poseer toda Britania (3 territorios)
+        # suma b_c = 2 soldados.
         from age_of_conquest.mapa import MAPA as MAPA_REAL
 
         with patch.object(estado, "MAPA", MAPA_REAL):
             s = GameState()
             s.inicializar_provincias()
             s.crear_jugador("P1")
-            for i in MAPA_REAL.territorios_continente[5]:  # Oceania
+            for i in MAPA_REAL.territorios_continente[0]:  # Britania
                 s.provincias[i].dueno = 1
             m = Motor(s, {}, self.rng)
             self.assertEqual(m.refuerzos_totales(1), 3 + 2)

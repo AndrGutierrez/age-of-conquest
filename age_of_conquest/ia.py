@@ -202,8 +202,9 @@ class ControladorIA(ControladorJugador):
 
         Recorre las provincias fronterizas con al menos 2 ejercitos y
         selecciona el objetivo enemigo con la mayor ventaja relativa que
-        supere el umbral del perfil. La guarnicion minima (config) se
-        respeta al calcular la fuerza disponible.
+        supere el umbral del perfil. La defensa se estima multiplicando
+        los ejercitos enemigos por el multiplicador de terreno theta_T
+        (la IA evita atacar montanas y bosques en desventaja).
         """
         cfg = estado.config
         mejores = []
@@ -213,8 +214,10 @@ class ControladorIA(ControladorJugador):
             if disponibles < 1:
                 continue
             for k in estado.vecinos_enemigos_de(i, jugador.id):
-                defensa = estado.provincias[k].ejercitos
-                ratio = disponibles / max(1, defensa)
+                prov_def = estado.provincias[k]
+                theta = cfg.theta_terreno[prov_def.terreno().terreno]
+                defensa = prov_def.ejercitos * theta
+                ratio = disponibles / max(1.0, defensa)
                 if ratio >= umbral:
                     # preferir objetivos con mayor ratio y menor defensa
                     mejores.append((ratio, -defensa, i, k))

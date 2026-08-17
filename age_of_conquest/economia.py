@@ -345,9 +345,14 @@ def probabilidad_rebelion(h: float, config: Config | None = None) -> float:
 def comprobar_rebeliones(estado: GameState, rng: random.Random) -> list[int]:
     """Muestreo Monte Carlo: cada provincia inestable se rebela si u <= pi.
 
-    Una provincia rebelde se convierte en neutral: pierde a su dueno y queda
-    guarnecida por milicias locales (decision de diseno; el documento define
-    la rebelion como "territorio neutral o faccion independiente").
+    Una provincia rebelde se convierte en neutral: pierde a su dueno y su
+    guarnicion se convierte en milicias locales. La milicia conserva parte
+    de los efectivos (entre guarnicion_neutral y milicia_max) para no
+    drenar el sistema militar del mundo, y la faccion independiente renace
+    con la felicidad inicial: si fuese reconquistada con H ~ 0, se rebelaria
+    de nuevo cada ronda en un ciclo sin fin (decision de diseno; el
+    documento define la rebelion como "territorio neutral o faccion
+    independiente").
     """
     cfg = estado.config
     rebeldes = []
@@ -357,7 +362,10 @@ def comprobar_rebeliones(estado: GameState, rng: random.Random) -> list[int]:
         pi = probabilidad_rebelion(prov.felicidad, cfg)
         if pi > 0.0 and rng.random() <= pi:
             prov.dueno = NEUTRAL
-            prov.ejercitos = cfg.guarnicion_neutral
+            prov.ejercitos = max(
+                cfg.guarnicion_neutral, min(prov.ejercitos, cfg.milicia_max)
+            )
+            prov.felicidad = cfg.felicidad_inicial
             prov.impuesto = 0.0
             prov.ocupada_reciente = False
             rebeldes.append(i)

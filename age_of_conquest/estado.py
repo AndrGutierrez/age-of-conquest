@@ -8,7 +8,7 @@ Variables de estado que persisten entre turnos:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .config import CONFIG, Config
 from .mapa import MAPA
