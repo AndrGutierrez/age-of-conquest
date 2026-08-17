@@ -4,6 +4,7 @@ Uso:
     python main.py                        # menu interactivo de inicio
     python main.py --demo 5               # demo automatica (Ascenso de Roma)
     python main.py --escenario caida      # partida interactiva en otro escenario
+    python main.py --imperio "Hunos"      # elige el imperio del humano
     python main.py --demo 5 --escenario medieval
     python main.py --seed 42              # semilla fija (reproducibilidad)
     python main.py --turnos 10            # limite de turnos de la partida
@@ -39,6 +40,12 @@ def main() -> None:
         help="escenario historico de la partida (defecto: roma)",
     )
     parser.add_argument(
+        "--imperio",
+        default=None,
+        help="imperio que controla el humano en modo interactivo "
+        "(defecto: el imperio principal del escenario)",
+    )
+    parser.add_argument(
         "--demo",
         type=int,
         metavar="N",
@@ -62,9 +69,15 @@ def main() -> None:
     if args.demo is not None:
         partida_demo(seed=args.seed, max_turnos=args.demo, escenario=args.escenario)
     else:
-        partida_interactiva(
-            seed=args.seed, max_turnos=args.turnos, escenario=args.escenario
-        )
+        try:
+            partida_interactiva(
+                seed=args.seed,
+                max_turnos=args.turnos,
+                escenario=args.escenario,
+                imperio_humano=args.imperio,
+            )
+        except ValueError as e:
+            parser.error(str(e))
 
 
 if __name__ == "__main__":

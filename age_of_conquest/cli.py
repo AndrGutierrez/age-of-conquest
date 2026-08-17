@@ -41,19 +41,31 @@ def crear_partida(
     seed: int | None = None,
     escenario: str = "roma",
     todos_ia: bool = False,
+    imperio_humano: str | None = None,
     config: Config | None = None,
 ) -> tuple[GameState, Motor, str]:
     """Prepara el estado y el motor de una partida nueva.
 
     Aplica el escenario historico indicado (imperios y territorios
     iniciales fijos, sin reparto aleatorio) y devuelve (estado, motor,
-    nombre del escenario). Si todos_ia es True, todos los imperios son
-    controlados por la IA (modo demo).
+    nombre del escenario). El humano controla imperio_humano (por
+    defecto, el imperio principal del escenario). Si todos_ia es True,
+    todos los imperios son controlados por la IA (modo demo).
     """
     esc = ESCENARIOS[escenario]
+    if imperio_humano is not None and not any(
+        imp.nombre == imperio_humano for imp in esc.imperios
+    ):
+        nombres = ", ".join(imp.nombre for imp in esc.imperios)
+        raise ValueError(
+            f"El escenario '{esc.nombre}' no tiene el imperio "
+            f"'{imperio_humano}'. Disponibles: {nombres}."
+        )
     estado = GameState(config)
     estado.inicializar_provincias()
-    aplicar_escenario(estado, esc, todos_ia=todos_ia)
+    aplicar_escenario(
+        estado, esc, todos_ia=todos_ia, humano_nombre=imperio_humano
+    )
     controladores = crear_controladores(estado, ControladorIA, ControladorHumano)
     rng = random.Random(seed)
     motor = Motor(estado, controladores, rng)
@@ -394,10 +406,29 @@ def menu_principal(consola: "Consola | None" = None) -> None:
 
     # --- Eleccion de modo ---
     c.print("\nModo de juego:")
-    c.print(f"  1) Partida interactiva (tu controlas {esc.imperios[0].nombre})")
+    c.print("  1) Partida interactiva (tu contra la IA)")
     c.print("  2) Demo automatica (todos los imperios con IA)")
     modo = _leer(c, "\nElige modo [1-2] (1): ", "1")
     demo = modo.strip() == "2"
+
+    # --- Eleccion del imperio del humano (solo modo interactivo) ---
+    imperio_humano: str | None = None
+    if not demo:
+        c.print("\nImperios del escenario:")
+        for i, imp in enumerate(esc.imperios, 1):
+            c.print(f"  {i}) {imp.nombre}")
+        eleccion = _leer(
+            c,
+            f"\nElige imperio [1-{len(esc.imperios)}] (1): ",
+            "1",
+        )
+        try:
+            indice = int(eleccion) - 1
+            if not (0 <= indice < len(esc.imperios)):
+                indice = 0
+        except ValueError:
+            indice = 0
+        imperio_humano = esc.imperios[indice].nombre
 
     # --- Parametros ---
     if demo:
@@ -423,7 +454,11 @@ def menu_principal(consola: "Consola | None" = None) -> None:
         partida_demo(seed=seed, max_turnos=max_turnos, escenario=escenario, consola=c)
     else:
         partida_interactiva(
-            seed=seed, max_turnos=max_turnos, escenario=escenario, consola=c
+            seed=seed,
+            max_turnos=max_turnos,
+            escenario=escenario,
+            imperio_humano=imperio_humano,
+            consola=c,
         )
 
 
@@ -435,12 +470,15 @@ def partida_interactiva(
     seed: int | None = None,
     max_turnos: int | None = None,
     escenario: str = "roma",
+    imperio_humano: str | None = None,
     consola: Consola | None = None,
 ) -> None:
-    """Partida estandar: el imperio principal del escenario (humano) contra
-    los demas imperios historicos (IA)."""
+    """Partida estandar: el humano controla imperio_humano (por defecto el
+    imperio principal del escenario) contra los demas imperios (IA)."""
     c = consola or Consola()
-    estado, motor, nombre_esc = crear_partida(seed=seed, escenario=escenario)
+    estado, motor, nombre_esc = crear_partida(
+        seed=seed, escenario=escenario, imperio_humano=imperio_humano
+    )
     # La distribucion de territorios es fija (escenario); solo se programa
     # el primer REFUERZO de la LEF.
     motor._programar(FASE_REFUERZO, estado.jugadores_activos()[0], PRIO_REFUERZO)

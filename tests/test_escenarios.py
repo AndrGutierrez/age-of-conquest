@@ -9,7 +9,12 @@ from age_of_conquest.escenarios import (
     aplicar_escenario,
     validar_escenario,
 )
-from age_of_conquest.estado import NEUTRAL, GameState
+from age_of_conquest.estado import (
+    NEUTRAL,
+    PERFIL_AGRESIVO,
+    PERFIL_EQUILIBRADO,
+    GameState,
+)
 from age_of_conquest.mapa import MAPA
 
 
@@ -104,6 +109,27 @@ class TestAplicarEscenario(unittest.TestCase):
         humanos = [j for j in s.jugadores.values() if j.humano]
         self.assertEqual(len(humanos), 1)
         self.assertEqual(humanos[0].nombre, "Republica Romana")
+
+    def test_eleccion_de_imperio_humano(self):
+        s = GameState()
+        s.inicializar_provincias()
+        aplicar_escenario(
+            s, ESCENARIOS["roma"], humano_nombre="Macedonia"
+        )
+        humanos = [j for j in s.jugadores.values() if j.humano]
+        self.assertEqual(len(humanos), 1)
+        self.assertEqual(humanos[0].nombre, "Macedonia")
+        self.assertEqual(humanos[0].perfil, PERFIL_AGRESIVO)
+        # El imperio principal pasa a IA con perfil equilibrado
+        roma = next(j for j in s.jugadores.values() if j.nombre == "Republica Romana")
+        self.assertFalse(roma.humano)
+        self.assertEqual(roma.perfil, PERFIL_EQUILIBRADO)
+
+    def test_eleccion_invalida_es_rechazada(self):
+        from age_of_conquest.cli import crear_partida
+
+        with self.assertRaises(ValueError):
+            crear_partida(escenario="roma", imperio_humano="Atlantis")
 
 
 if __name__ == "__main__":

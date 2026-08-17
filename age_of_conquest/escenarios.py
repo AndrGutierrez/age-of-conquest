@@ -131,26 +131,36 @@ def aplicar_escenario(
     esc: Escenario,
     config: Config | None = None,
     todos_ia: bool = False,
+    humano_nombre: str | None = None,
 ) -> None:
     """Prepara el estado con los imperios y territorios fijos del escenario.
 
     Los territorios de cada imperio reciben los ejercitos iniciales de la
     configuracion y la capital recibe BONUS_CAPITAL adicionales. Las
     provincias restantes quedan neutrales con su guarnicion de milicias.
-    Si todos_ia es True, se ignora el indicador humano del escenario
-    (usado por el modo demo).
+
+    El imperio humano se elige con humano_nombre (por defecto, el imperio
+    principal del escenario). Si todos_ia es True, todos los imperios son
+    controlados por la IA (modo demo) y se ignora humano_nombre.
     """
     cfg = config or estado.config
     for imp in esc.imperios:
-        humano = imp.humano and not todos_ia
+        es_humano = (
+            (not todos_ia)
+            and (
+                (humano_nombre is None and imp.humano)
+                or imp.nombre == humano_nombre
+            )
+        )
         perfil = imp.perfil
-        if not humano and perfil == PERFIL_HUMANO:
-            # En modo demo el imperio principal juega con IA equilibrada
+        if not es_humano and perfil == PERFIL_HUMANO:
+            # Si el imperio principal no lo lleva el humano, su IA usa
+            # el perfil equilibrado.
             perfil = PERFIL_EQUILIBRADO
         j = estado.crear_jugador(
             imp.nombre,
             perfil=perfil,
-            humano=humano,
+            humano=es_humano,
         )
         for tid in imp.territorios:
             prov = estado.provincias[tid]

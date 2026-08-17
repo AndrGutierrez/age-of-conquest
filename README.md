@@ -13,24 +13,28 @@ territorios iniciales fijos** según la época (sin reparto aleatorio).
 ## Ejecución
 
 ```bash
-python main.py                            # partida interactiva (Ascenso de Roma)
-python main.py --escenario caida          # Caida de Roma (452 d.C.)
-python main.py --escenario medieval       # Edad Media (1066 d.C.)
+python main.py                            # menu interactivo de inicio
+python main.py --escenario caida          # partida interactiva en otro escenario
+python main.py --imperio "Hunos"          # elige el imperio que controla el humano
 python main.py --demo 5                   # demo automatica: 5 turnos con solo IA
 python main.py --demo 5 --escenario caida
 python main.py --seed 42                  # semilla fija (reproducibilidad)
 python main.py --help
 ```
 
+El menu de inicio permite elegir el escenario, el modo (interactivo o demo),
+el imperio con el que se juega, el limite de turnos y la semilla.
+
 ### Escenarios
 
 | Clave | Escenario | Época | Imperios |
 |---|---|---|---|
-| `roma` | Ascenso de Roma | 264 a.C. | Republica Romana*, Cartago, Egipto Ptolemaico, Macedonia |
-| `caida` | Caida de Roma | 452 d.C. | Imperio Romano de Occidente*, Imperio Bizantino, Hunos, Reino Visigodo |
-| `medieval` | Edad Media | 1066 d.C. | Reino de Inglaterra*, Reino de Francia, Sacro Imperio, Imperio Bizantino, Al-Andalus |
+| `roma` | Ascenso de Roma | 264 a.C. | Republica Romana, Cartago, Egipto Ptolemaico, Macedonia |
+| `caida` | Caida de Roma | 452 d.C. | Imperio Romano de Occidente, Imperio Bizantino, Hunos, Reino Visigodo |
+| `medieval` | Edad Media | 1066 d.C. | Reino de Inglaterra, Reino de Francia, Sacro Imperio, Imperio Bizantino, Al-Andalus |
 
-\* imperio controlado por el humano en modo interactivo.
+En modo interactivo puedes jugar con cualquiera de los imperios del escenario
+(el primero de la lista es la opcion por defecto del menu).
 
 ### Regiones del mapa (bonificaciones por control total)
 
