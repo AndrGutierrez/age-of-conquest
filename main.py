@@ -1,9 +1,10 @@
 """Punto de entrada del simulador Age of Conquest.
 
 Uso:
-    python main.py                        # partida interactiva (Ascenso de Roma)
-    python main.py --escenario caida      # otro escenario historico
-    python main.py --demo 5               # demo automatica de 5 turnos (solo IA)
+    python main.py                        # menu interactivo de inicio
+    python main.py --demo 5               # demo automatica (Ascenso de Roma)
+    python main.py --escenario caida      # partida interactiva en otro escenario
+    python main.py --demo 5 --escenario medieval
     python main.py --seed 42              # semilla fija (reproducibilidad)
     python main.py --turnos 10            # limite de turnos de la partida
 
@@ -16,12 +17,18 @@ Escenarios disponibles:
 from __future__ import annotations
 
 import argparse
+import sys
 
-from age_of_conquest.cli import partida_demo, partida_interactiva
+from age_of_conquest.cli import menu_principal, partida_demo, partida_interactiva
 from age_of_conquest.escenarios import ESCENARIOS
 
 
 def main() -> None:
+    # Sin argumentos: menu interactivo de inicio
+    if len(sys.argv) == 1:
+        menu_principal()
+        return
+
     parser = argparse.ArgumentParser(
         description="Motor de simulacion Age of Conquest (SIMUSIST)"
     )

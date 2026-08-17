@@ -353,6 +353,81 @@ class ControladorHumano(ControladorJugador):
 
 
 # ---------------------------------------------------------------------------
+# Menu principal interactivo
+# ---------------------------------------------------------------------------
+
+def _leer(c: "Consola", prompt: str, por_defecto: str = "") -> str:
+    """Lee una linea del usuario; devuelve el valor por defecto si la
+    entrada esta vacia o llega EOF (permite automatizar con tuberias)."""
+    try:
+        valor = c.input(prompt).strip()
+    except EOFError:
+        return por_defecto
+    return valor if valor else por_defecto
+
+
+def menu_principal(consola: "Consola | None" = None) -> None:
+    """Menu de inicio: elige escenario, modo de juego, turnos y semilla."""
+    c = consola or Consola()
+    c.print()
+    c.print("=" * 70)
+    c.print("  AGE OF CONQUEST - MOTOR DE SIMULACION (proyecto SIMUSIST)")
+    c.print("=" * 70)
+
+    # --- Eleccion de escenario ---
+    c.print("\nEscenarios disponibles:")
+    claves = list(ESCENARIOS)
+    for i, clave in enumerate(claves, 1):
+        esc = ESCENARIOS[clave]
+        imperios = ", ".join(imp.nombre for imp in esc.imperios)
+        c.print(f"  {i}) {esc.nombre} ({esc.epoca})")
+        c.print(f"     Imperios: {imperios}")
+    eleccion = _leer(c, f"\nElige escenario [1-{len(claves)}] (1): ", "1")
+    try:
+        indice = int(eleccion) - 1
+        if not (0 <= indice < len(claves)):
+            indice = 0
+    except ValueError:
+        indice = 0
+    escenario = claves[indice]
+    esc = ESCENARIOS[escenario]
+
+    # --- Eleccion de modo ---
+    c.print("\nModo de juego:")
+    c.print(f"  1) Partida interactiva (tu controlas {esc.imperios[0].nombre})")
+    c.print("  2) Demo automatica (todos los imperios con IA)")
+    modo = _leer(c, "\nElige modo [1-2] (1): ", "1")
+    demo = modo.strip() == "2"
+
+    # --- Parametros ---
+    if demo:
+        turnos = _leer(c, "Turnos de la demo (5): ", "5")
+        try:
+            max_turnos = max(1, int(turnos))
+        except ValueError:
+            max_turnos = 5
+    else:
+        turnos = _leer(c, "Limite de turnos [Enter = sin limite]: ", "")
+        try:
+            max_turnos = int(turnos) if turnos else None
+        except ValueError:
+            max_turnos = None
+
+    semilla = _leer(c, "Semilla aleatoria [Enter = al azar]: ", "")
+    try:
+        seed = int(semilla) if semilla else None
+    except ValueError:
+        seed = None
+
+    if demo:
+        partida_demo(seed=seed, max_turnos=max_turnos, escenario=escenario, consola=c)
+    else:
+        partida_interactiva(
+            seed=seed, max_turnos=max_turnos, escenario=escenario, consola=c
+        )
+
+
+# ---------------------------------------------------------------------------
 # Bucles de partida
 # ---------------------------------------------------------------------------
 
