@@ -379,7 +379,7 @@ def _leer(c: "Consola", prompt: str, por_defecto: str = "") -> str:
 
 
 def menu_principal(consola: "Consola | None" = None) -> None:
-    """Menu de inicio: elige escenario, modo de juego, turnos y semilla."""
+    """Menu de inicio: elige escenario, imperio, modo, turnos y semilla."""
     c = consola or Consola()
     c.print()
     c.print("=" * 70)
@@ -392,7 +392,7 @@ def menu_principal(consola: "Consola | None" = None) -> None:
     for i, clave in enumerate(claves, 1):
         esc = ESCENARIOS[clave]
         imperios = ", ".join(imp.nombre for imp in esc.imperios)
-        c.print(f"  {i}) {esc.nombre} ({esc.epoca})")
+        c.print(f"  {i}) {esc.nombre}")
         c.print(f"     Imperios: {imperios}")
     eleccion = _leer(c, f"\nElige escenario [1-{len(claves)}] (1): ", "1")
     try:
@@ -404,31 +404,29 @@ def menu_principal(consola: "Consola | None" = None) -> None:
     escenario = claves[indice]
     esc = ESCENARIOS[escenario]
 
+    # --- Eleccion del imperio con el que se juega ---
+    c.print("\nImperios del escenario:")
+    for i, imp in enumerate(esc.imperios, 1):
+        c.print(f"  {i}) {imp.nombre}")
+    eleccion = _leer(
+        c,
+        f"\nElige imperio [1-{len(esc.imperios)}] (1): ",
+        "1",
+    )
+    try:
+        indice = int(eleccion) - 1
+        if not (0 <= indice < len(esc.imperios)):
+            indice = 0
+    except ValueError:
+        indice = 0
+    imperio_humano = esc.imperios[indice].nombre
+
     # --- Eleccion de modo ---
     c.print("\nModo de juego:")
-    c.print("  1) Partida interactiva (tu contra la IA)")
+    c.print("  1) Partida interactiva (tu controlas el imperio elegido)")
     c.print("  2) Demo automatica (todos los imperios con IA)")
     modo = _leer(c, "\nElige modo [1-2] (1): ", "1")
     demo = modo.strip() == "2"
-
-    # --- Eleccion del imperio del humano (solo modo interactivo) ---
-    imperio_humano: str | None = None
-    if not demo:
-        c.print("\nImperios del escenario:")
-        for i, imp in enumerate(esc.imperios, 1):
-            c.print(f"  {i}) {imp.nombre}")
-        eleccion = _leer(
-            c,
-            f"\nElige imperio [1-{len(esc.imperios)}] (1): ",
-            "1",
-        )
-        try:
-            indice = int(eleccion) - 1
-            if not (0 <= indice < len(esc.imperios)):
-                indice = 0
-        except ValueError:
-            indice = 0
-        imperio_humano = esc.imperios[indice].nombre
 
     # --- Parametros ---
     if demo:
