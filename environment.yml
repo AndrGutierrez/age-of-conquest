@@ -1,0 +1,9 @@
+name: age-of-conquest
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python>=3.9
+  - pip
+  - pip:
+      - colorama>=0.4.6

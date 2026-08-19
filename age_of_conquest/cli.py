@@ -22,6 +22,23 @@ from __future__ import annotations
 import random
 
 from . import economia
+from .colores import (
+    c_amarillo,
+    c_azul,
+    c_blanco,
+    c_cyan,
+    c_gris,
+    c_magenta,
+    c_naranja,
+    c_negrita,
+    c_rojo,
+    c_verde,
+    estilo_alerta_humano,
+    estilo_felicidad,
+    estilo_jugador,
+    estilo_tesoro,
+    limpiar_consola,
+)
 from .config import Config, TERRENO_NOMBRES
 from .escenarios import ESCENARIOS, aplicar_escenario, crear_controladores
 from .estado import NEUTRAL, GameState, Jugador
@@ -38,6 +55,10 @@ class Consola:
 
     def input(self, prompt: str) -> str:
         return input(prompt)
+
+    def limpiar(self) -> None:
+        """Limpia la pantalla de la consola de forma segura."""
+        limpiar_consola()
 
 
 def crear_partida(
@@ -80,7 +101,7 @@ def crear_partida(
 # ---------------------------------------------------------------------------
 
 def formato_tesoro(v: float) -> str:
-    return f"{v:,.1f} oro"
+    return estilo_tesoro(v)
 
 
 def resumen_imperio(estado: GameState, j: Jugador) -> str:
@@ -90,36 +111,60 @@ def resumen_imperio(estado: GameState, j: Jugador) -> str:
     eje = estado.total_ejercitos(p)
     ingresos = economia.recaudacion_total(estado, p)
     gasto = economia.mantenimiento_militar(estado, p) + economia.mantenimiento_infra(estado, p)
+    nombre_formateado = estilo_jugador(f"{j.nombre:<20}", j.humano)
+    tag_humano = c_cyan(" [TU]") if j.humano else ""
+    alerta_banc = c_rojo(" [! BANCARROTA]") if j.bancarrota else ""
     return (
-        f"J{j.id} {j.nombre:<20} ({j.perfil}) | territorios: {n:>2} | "
-        f"ejercitos: {eje:>4} | tesoro: {formato_tesoro(j.tesoro)} | "
-        f"ingresos: {ingresos:>7.1f} | gastos: {gasto:>6.1f}"
+        f"J{j.id} {nombre_formateado}{tag_humano} ({j.perfil:<10}) | "
+        f"tierras: {c_blanco(f'{n:>2}')} | "
+        f"tropas: {c_blanco(f'{eje:>4}')} | "
+        f"tesoro: {formato_tesoro(j.tesoro)} | "
+        f"ingresos: {c_verde(f'{ingresos:>6.1f}')} | "
+        f"gastos: {c_rojo(f'{gasto:>5.1f}')}{alerta_banc}"
     )
 
 
 def tabla_general(estado: GameState) -> str:
     """Estado general de la partida: jugadores y su resumen."""
-    lineas = [f"--- Turno {estado.turno} ---"]
+    lineas = [
+        c_cyan(c_negrita("=" * 78)),
+        c_cyan(c_negrita(f"  ESTADO GENERAL -- TURNO {estado.turno}")),
+        c_cyan(c_negrita("=" * 78)),
+    ]
     for j in estado.jugadores.values():
         if j.activo:
             lineas.append(resumen_imperio(estado, j))
         else:
-            lineas.append(f"J{j.id} {j.nombre:<20} ELIMINADO")
+            lineas.append(c_gris(f"J{j.id} {j.nombre:<20} ELIMINADO"))
+    lineas.append(c_cyan(c_negrita("-" * 78)))
     return "\n".join(lineas)
 
 
 def mapa_compacto(estado: GameState) -> str:
     """Mapa completo agrupado por continentes (42 territorios)."""
-    lineas = []
+    lineas = [c_negrita("============= MAPA DE EUROPA (42 PROVINCIAS) =============")]
     for c, ids in MAPA.territorios_continente.items():
-        lineas.append(f"{CONTINENTE_NOMBRES[c]} (bonus {CONTINENTE_BONUS_SOLDADOS[c]}):")
+        nom_cont = c_amarillo(c_negrita(CONTINENTE_NOMBRES[c]))
+        bonus_txt = c_verde(f"+{CONTINENTE_BONUS_SOLDADOS[c]} tropas / +{CONTINENTE_BONUS_SOLDADOS[c]*3} oro")
+        lineas.append(f"\n{nom_cont} (Control total: {bonus_txt}):")
         for i in ids:
             prov = estado.provincias[i]
             dueno = prov.dueno
+            es_humano = estado.jugadores[dueno].humano if dueno != NEUTRAL else False
+            es_neutral = dueno == NEUTRAL
             nombre = (
-                estado.jugadores[dueno].nombre if dueno != NEUTRAL else "Neutral"
+                estado.jugadores[dueno].nombre if not es_neutral else "Neutral"
             )
-            lineas.append(f"  [{i:>2}] {MAPA.territorio(i).nombre:<24} {nombre:<16} A={prov.ejercitos:>3}")
+            nombre_styled = estilo_jugador(f"{nombre:<16}", es_humano, es_neutral)
+            h_styled = estilo_felicidad(prov.felicidad)
+            eje_styled = c_cyan(f"A={prov.ejercitos:>3}") if es_humano else (
+                c_gris(f"A={prov.ejercitos:>3}") if es_neutral else c_blanco(f"A={prov.ejercitos:>3}")
+            )
+            lineas.append(
+                f"  [{c_cyan(f'{i:>2}')}] {MAPA.territorio(i).nombre:<22} "
+                f"{nombre_styled} {eje_styled} H={h_styled}"
+            )
+    lineas.append(c_negrita("============================================================"))
     return "\n".join(lineas)
 
 
@@ -274,11 +319,13 @@ class ControladorHumano(ControladorJugador):
         for i in estado.territorios_de(jugador.id):
             prov = estado.provincias[i]
             t = prov.terreno()
-            es = "frontera" if estado.vecinos_enemigos_de(i, jugador.id) else "interior"
+            es_frontera = bool(estado.vecinos_enemigos_de(i, jugador.id))
+            tag_pos = c_rojo("FRONTERA") if es_frontera else c_verde("INTERIOR")
+            h_txt = estilo_felicidad(prov.felicidad)
             lineas.append(
-                f"{t.nombre:<24} A={prov.ejercitos:>3} "
-                f"P={prov.poblacion:>6.0f} H={prov.felicidad:.2f} "
-                f"tau={prov.impuesto:.0%} ({TERRENO_NOMBRES[t.terreno]} - {es})"
+                f"{t.nombre:<22} A={c_cyan(f'{prov.ejercitos:>3}')} "
+                f"P={prov.poblacion:>5.0f} H={h_txt} "
+                f"tau={prov.impuesto:.0%} [{TERRENO_NOMBRES[t.terreno]:<7} | {tag_pos}]"
             )
         return lineas
 
@@ -288,9 +335,12 @@ class ControladorHumano(ControladorJugador):
     def colocar_refuerzos(self, estado: GameState, jugador: Jugador, cantidad: int) -> None:
         c = self.consola
         self._pasar_turno = False
-        c.print(f"\n=== TURNO {estado.turno} - {jugador.nombre.upper()} - FASE REFUERZO ===")
+        c.limpiar()
+        c.print(c_cyan(c_negrita("\n==============================================================================")))
+        c.print(c_cyan(c_negrita(f"  TURNO {estado.turno} -- {jugador.nombre.upper():<20} -- FASE REFUERZO")))
+        c.print(c_cyan(c_negrita("==============================================================================")))
         c.print(mapa_compacto(estado))
-        c.print(f"Recibes {cantidad} refuerzos (max(3, territorios/3) + bonus de continentes).")
+        c.print(f"\nRecibes {c_verde(c_negrita(str(cantidad)))} refuerzos (max(3, territorios/3) + bonus de continentes).")
 
         pendientes = cantidad
         while pendientes > 0:
@@ -298,7 +348,7 @@ class ControladorHumano(ControladorJugador):
             menu = MenuTerritorios(
                 c,
                 list(zip(ids, self._lista_provincias(estado, jugador))),
-                titulo=f"Refuerzos pendientes: {pendientes}",
+                titulo=f"\nRefuerzos pendientes por asignar: {c_verde(c_negrita(str(pendientes)))}",
                 opcion_cero="Distribuir automaticamente en la frontera",
                 prompt="Elige territorio (id): ",
             )
@@ -312,7 +362,7 @@ class ControladorHumano(ControladorJugador):
                 for k in range(pendientes):
                     estado.provincias[frontera[k % len(frontera)]].ejercitos += 1
                 pendientes = 0
-                c.print("Refuerzos distribuidos en la frontera.")
+                c.print(c_verde("Refuerzos distribuidos equitativamente en la frontera."))
                 break
             i = n
             cuantos = _pedir_entero(
@@ -326,25 +376,28 @@ class ControladorHumano(ControladorJugador):
             estado.provincias[i].ejercitos += cuantos
             pendientes -= cuantos
             c.print(
-                f"+{cuantos} en {estado.mapa.territorio(i).nombre} "
-                f"(A={estado.provincias[i].ejercitos})"
+                c_verde(f"+{cuantos} en {estado.mapa.territorio(i).nombre} "
+                f"(A={estado.provincias[i].ejercitos})")
             )
-        _pausa(c, "ENTER para pasar a la fase de ataque... ")
+        _pausa(c, c_amarillo("\nPresiona ENTER para pasar a la fase de ataque... "))
 
     # ------------------------------------------------------------------
     # Fase ATAQUE
     # ------------------------------------------------------------------
     def fase_ataque(self, motor: Motor, estado: GameState, jugador: Jugador) -> None:
         c = self.consola
-        c.print(f"\n--- {jugador.nombre} - FASE ATAQUE ---")
+        c.limpiar()
+        c.print(c_rojo(c_negrita("\n==============================================================================")))
+        c.print(c_rojo(c_negrita(f"  TURNO {estado.turno} -- {jugador.nombre.upper():<20} -- FASE ATAQUE Y ACCIONES")))
+        c.print(c_rojo(c_negrita("==============================================================================")))
         c.print(mapa_compacto(estado))
         while True:
             ids = estado.territorios_de(jugador.id)
             menu = MenuTerritorios(
                 c,
                 list(zip(ids, self._lista_provincias(estado, jugador))),
-                titulo="Elige un territorio para ver sus acciones:",
-                opcion_cero="Pasar turno (sin movimiento)",
+                titulo=c_negrita("\nElige un territorio propio para ver sus acciones disponibles:"),
+                opcion_cero="Pasar turno (terminar ataques y movimiento)",
                 prompt="Territorio (id): ",
             )
             n = menu.elegir()
@@ -361,16 +414,20 @@ class ControladorHumano(ControladorJugador):
         while True:
             prov = estado.provincias[i]
             c.print(
-                f"\n[{i}] {estado.mapa.territorio(i).nombre} | A={prov.ejercitos} | "
-                f"P={prov.poblacion:.0f} | H={prov.felicidad:.2f} | "
-                f"tau={prov.impuesto:.0%} | F={prov.fortificacion} | I={prov.infraestructura}"
+                "\n" + c_amarillo(c_negrita(f"--- PROVINCIA [{i}] {estado.mapa.territorio(i).nombre.upper()} ---")) + "\n"
+                f"  Tropas: {c_cyan(str(prov.ejercitos))} | "
+                f"Poblacion: {c_blanco(f'{prov.poblacion:.0f}')} | "
+                f"Felicidad: {estilo_felicidad(prov.felicidad)} | "
+                f"Impuesto: {c_amarillo(f'{prov.impuesto:.0%}')} | "
+                f"Murallas: {c_naranja(f'{prov.fortificacion}/3')} | "
+                f"Infraestructura: {c_naranja(f'{prov.infraestructura}/3')}"
             )
             acciones = ["Atacar a un territorio enemigo adyacente",
-                        "Reclutar tropas (cuesta oro y poblacion)",
+                        "Reclutar tropas (cuesta oro y poblacion civil)",
                         "Construir fortificacion o infraestructura",
-                        "Cambiar impuesto de este territorio",
+                        "Cambiar tasa de impuesto de este territorio",
                         "Terminar ataques (pasar a la fase de movimiento)"]
-            menu = Menu(c, acciones, opcion_cero="Volver", prompt="Accion: ")
+            menu = Menu(c, acciones, opcion_cero="Volver a la lista de provincias", prompt="Accion: ")
             a = menu.elegir()
             if a == 0:
                 return False
@@ -388,26 +445,29 @@ class ControladorHumano(ControladorJugador):
     def _menu_ataque(self, motor: Motor, estado: GameState, jugador: Jugador, origen: int) -> None:
         c = self.consola
         if estado.provincias[origen].ejercitos < 2:
-            c.print("No puedes atacar: se necesitan al menos 2 ejercitos.")
+            c.print(c_rojo("No puedes atacar: se necesitan al menos 2 ejercitos (1 para atacar y 1 en guardia)."))
             _pausa(c)
             return
         enemigos = estado.vecinos_enemigos_de(origen, jugador.id)
         if not enemigos:
-            c.print("No hay enemigos adyacentes a esta provincia.")
+            c.print(c_amarillo("No hay enemigos adyacentes a esta provincia."))
             _pausa(c)
             return
         opciones = []
         for k in enemigos:
             d = estado.provincias[k]
-            dueno = "Neutral" if d.dueno == NEUTRAL else estado.jugadores[d.dueno].nombre
+            es_neut = d.dueno == NEUTRAL
+            dueno = "Neutral" if es_neut else estado.jugadores[d.dueno].nombre
+            dueno_txt = estilo_jugador(dueno, False, es_neut)
+            t_nom = TERRENO_NOMBRES[d.terreno().terreno]
             opciones.append(
-                f"{estado.mapa.territorio(k).nombre} ({dueno}, A={d.ejercitos})"
+                f"{estado.mapa.territorio(k).nombre} ({dueno_txt}, A={c_blanco(str(d.ejercitos))}, {t_nom})"
             )
         menu = MenuTerritorios(
             c,
             list(zip(enemigos, opciones)),
-            titulo="Objetivos de ataque:",
-            opcion_cero="Cancelar",
+            titulo=c_rojo(c_negrita("\nObjetivos de ataque disponibles:")),
+            opcion_cero="Cancelar ataque",
             prompt="Objetivo (id): ",
         )
         n = menu.elegir()
@@ -417,10 +477,10 @@ class ControladorHumano(ControladorJugador):
         modos = Menu(
             c,
             ["Batalla total (hasta conquista o agotamiento)",
-             "Una sola ronda",
+             "Una sola ronda de dados",
              "Numero fijo de rondas"],
             opcion_cero="Cancelar",
-            prompt="Modo: ",
+            prompt="Modo de combate: ",
         )
         m = modos.elegir()
         if m == 0:
@@ -434,17 +494,19 @@ class ControladorHumano(ControladorJugador):
         try:
             res = motor.ejecutar_ataque(origen, destino, max_rondas)
         except ValueError as e:
-            c.print(f"Error: {e}")
+            c.print(c_rojo(f"Error en combate: {e}"))
             _pausa(c)
             return
+
+        conq_msg = c_verde(c_negrita("[TERRITORIO CONQUISTADO]")) if res.conquistada else c_rojo("[DEFENSA RESISTE]")
+        bajas_a = c_rojo(str(res.bajas_atacante))
+        bajas_d = c_verde(str(res.bajas_defensor))
         c.print(
-            f"Resultado: {res.rondas} ronda(s), bajas atacante={res.bajas_atacante}, "
-            f"defensor={res.bajas_defensor}. "
-            + ("TERRITORIO CONQUISTADO" if res.conquistada else "Defensa resiste")
+            f"\nResultado: {res.rondas} ronda(s) | Bajas Atacante: {bajas_a} | Bajas Defensor: {bajas_d} -> {conq_msg}"
         )
         c.print(
-            f"Ahora: {estado.mapa.territorio(origen).nombre} A={estado.provincias[origen].ejercitos} | "
-            f"{estado.mapa.territorio(destino).nombre} A={estado.provincias[destino].ejercitos}"
+            f"Estado actual: {estado.mapa.territorio(origen).nombre} (A={estado.provincias[origen].ejercitos}) | "
+            f"{estado.mapa.territorio(destino).nombre} (A={estado.provincias[destino].ejercitos})"
         )
         _pausa(c)
 
@@ -453,7 +515,7 @@ class ControladorHumano(ControladorJugador):
         prov = estado.provincias[i]
         maximo = min(int(jugador.tesoro // estado.config.c_recl), int(prov.poblacion))
         if maximo < 1:
-            c.print("Sin recursos: oro insuficiente o poblacion baja.")
+            c.print(c_rojo("Sin recursos: oro insuficiente o poblacion civil muy baja."))
             _pausa(c)
             return
         n = _pedir_entero(
@@ -463,11 +525,11 @@ class ControladorHumano(ControladorJugador):
             1, maximo, maximo,
         )
         costo = n * estado.config.c_recl
-        if not _confirmar(c, f"Reclutar {n} soldados por {costo:.1f} oro? (ENTER=si, 0=no): "):
+        if not _confirmar(c, f"¿Reclutar {n} soldados por {c_amarillo(f'{costo:.1f} oro')}? (ENTER=si, 0=no): "):
             c.print("Reclutamiento cancelado.")
             return
         ok, msg = economia.reclutar(estado, i, n)
-        c.print(msg if ok else f"Error: {msg}")
+        c.print(c_verde(msg) if ok else c_rojo(f"Error: {msg}"))
         _pausa(c)
 
     def _menu_construir(self, estado: GameState, jugador: Jugador, i: int) -> None:
@@ -479,37 +541,37 @@ class ControladorHumano(ControladorJugador):
         if prov.fortificacion < cfg.nivel_max_fort:
             costo = cfg.c_fort[prov.fortificacion + 1] - cfg.c_fort[prov.fortificacion]
             opciones.append(
-                f"Fortificacion (nivel {prov.fortificacion} -> {prov.fortificacion + 1}, "
-                f"cuesta {costo:.0f} oro)"
+                f"{c_naranja('Fortificacion')} (nivel {c_naranja(str(prov.fortificacion))} -> {c_naranja(str(prov.fortificacion + 1))}, "
+                f"cuesta {c_amarillo(f'{costo:.0f} oro')})"
             )
             costos.append(costo)
         else:
-            opciones.append("Fortificacion al nivel maximo")
+            opciones.append(f"{c_naranja('Fortificacion')} al nivel maximo")
             costos.append(None)
         if prov.infraestructura < cfg.nivel_max_infra:
             costo = cfg.c_infra[prov.infraestructura + 1] - cfg.c_infra[prov.infraestructura]
             opciones.append(
-                f"Infraestructura (nivel {prov.infraestructura} -> {prov.infraestructura + 1}, "
-                f"cuesta {costo:.0f} oro)"
+                f"{c_naranja('Infraestructura')} (nivel {c_naranja(str(prov.infraestructura))} -> {c_naranja(str(prov.infraestructura + 1))}, "
+                f"cuesta {c_amarillo(f'{costo:.0f} oro')})"
             )
             costos.append(costo)
         else:
-            opciones.append("Infraestructura al nivel maximo")
+            opciones.append(f"{c_naranja('Infraestructura')} al nivel maximo")
             costos.append(None)
         menu = Menu(c, opciones, opcion_cero="Cancelar", prompt="Construccion: ")
         n = menu.elegir()
         if n == 0:
             return
         if costos[n - 1] is None:
-            c.print("Ya esta al nivel maximo.")
+            c.print(c_amarillo("Ya esta al nivel maximo."))
             _pausa(c)
             return
-        if not _confirmar(c, "Construir? (ENTER=si, 0=no): "):
+        if not _confirmar(c, f"¿Construir por {c_amarillo(f'{costos[n-1]:.0f} oro')}? (ENTER=si, 0=no): "):
             c.print("Construccion cancelada.")
             return
         tipo = "fort" if n == 1 else "infra"
         ok, msg = economia.construir(estado, i, tipo)
-        c.print(msg if ok else f"Error: {msg}")
+        c.print(c_verde(msg) if ok else c_rojo(f"Error: {msg}"))
         _pausa(c)
 
     def _menu_impuesto(self, estado: GameState, jugador: Jugador, i: int) -> None:
@@ -520,7 +582,7 @@ class ControladorHumano(ControladorJugador):
             c,
             [f"{int(t * 100)}%" for t in tasas],
             titulo=f"Impuesto actual de {estado.mapa.territorio(i).nombre}: "
-                   f"{prov.impuesto:.0%}",
+                   f"{c_amarillo(f'{prov.impuesto:.0%}')}",
             opcion_cero="Cancelar",
             prompt="Nueva tasa: ",
         )
@@ -528,7 +590,7 @@ class ControladorHumano(ControladorJugador):
         if n == 0:
             return
         ok, msg = economia.fijar_impuesto(estado, i, tasas[n - 1])
-        c.print(msg if ok else f"Error: {msg}")
+        c.print(c_verde(msg) if ok else c_rojo(f"Error: {msg}"))
         _pausa(c)
 
     # ------------------------------------------------------------------
@@ -537,9 +599,11 @@ class ControladorHumano(ControladorJugador):
     def fase_movimiento(self, motor: Motor, estado: GameState, jugador: Jugador) -> None:
         c = self.consola
         if self._pasar_turno:
-            # El jugador eligio pasar turno en la fase de ataque
             return
-        c.print(f"\n--- {jugador.nombre} - FASE MOVIMIENTO (unico, opcional) ---")
+        c.limpiar()
+        c.print(c_azul(c_negrita("\n==============================================================================")))
+        c.print(c_azul(c_negrita(f"  TURNO {estado.turno} -- {jugador.nombre.upper():<20} -- FASE MOVIMIENTO (UNICO, OPCIONAL)")))
+        c.print(c_azul(c_negrita("==============================================================================")))
         c.print(mapa_compacto(estado))
         ids = estado.territorios_de(jugador.id)
         lineas = self._lista_provincias(estado, jugador)
@@ -549,14 +613,14 @@ class ControladorHumano(ControladorJugador):
             if estado.provincias[ids[k]].ejercitos >= 2
         ]
         if not candidatos:
-            c.print("Ninguna provincia tiene tropas suficientes para mover.")
+            c.print(c_amarillo("Ninguna provincia tiene tropas suficientes para mover (minimo 2 tropas)."))
             _pausa(c)
             return
         menu = MenuTerritorios(
             c,
             candidatos,
-            titulo="Origen del movimiento (provincias con tropas disponibles):",
-            opcion_cero="Pasar sin mover",
+            titulo=c_negrita("\nOrigen del movimiento (provincias con tropas disponibles):"),
+            opcion_cero="Pasar sin mover tropas",
             prompt="Origen (id): ",
         )
         n = menu.elegir()
@@ -568,7 +632,7 @@ class ControladorHumano(ControladorJugador):
             if estado.provincias[k].dueno == jugador.id
         ]
         if not destinos:
-            c.print("Esa provincia no tiene provincias propias adyacentes.")
+            c.print(c_rojo("Esa provincia no tiene provincias propias adyacentes a donde mover."))
             _pausa(c)
             return
         opciones_d = [
@@ -583,24 +647,22 @@ class ControladorHumano(ControladorJugador):
         maximo = estado.provincias[origen].ejercitos - 1
         n_tropas = _pedir_entero(
             c,
-            f"Cantidad de tropas [1..{maximo}] (ENTER = todas): ",
+            f"Cantidad de tropas a transferir [1..{maximo}] (ENTER = todas): ",
             1, maximo, maximo,
         )
         if not _confirmar(
             c,
-            f"Mover {n_tropas} tropas de {estado.mapa.territorio(origen).nombre} a "
+            f"¿Mover {n_tropas} tropas de {estado.mapa.territorio(origen).nombre} a "
             f"{estado.mapa.territorio(destino).nombre}? (ENTER=si, 0=no): ",
         ):
             c.print("Movimiento cancelado.")
             return
         try:
             motor.ejecutar_movimiento(origen, destino, n_tropas)
-            c.print(f"Movidas {n_tropas} tropas.")
+            c.print(c_verde(f"Movidas {n_tropas} tropas."))
         except ValueError as e:
-            c.print(f"Error: {e}")
+            c.print(c_rojo(f"Error: {e}"))
         _pausa(c)
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -620,19 +682,20 @@ def _leer(c: "Consola", prompt: str, por_defecto: str = "") -> str:
 def menu_principal(consola: "Consola | None" = None) -> None:
     """Menu de inicio: elige escenario, imperio, modo, turnos y semilla."""
     c = consola or Consola()
+    c.limpiar()
     c.print()
-    c.print("=" * 70)
-    c.print("  AGE OF CONQUEST - MOTOR DE SIMULACION (proyecto SIMUSIST)")
-    c.print("=" * 70)
+    c.print(c_cyan(c_negrita("==============================================================================")))
+    c.print(c_cyan(c_negrita("  AGE OF CONQUEST -- MOTOR DE SIMULACION (PROYECTO FINAL SIMUSIST - UNET)")))
+    c.print(c_cyan(c_negrita("==============================================================================")))
 
     # --- Eleccion de escenario ---
-    c.print("\nEscenarios disponibles:")
+    c.print(c_amarillo(c_negrita("\nEscenarios historicos disponibles:")))
     claves = list(ESCENARIOS)
     for i, clave in enumerate(claves, 1):
         esc = ESCENARIOS[clave]
         imperios = ", ".join(imp.nombre for imp in esc.imperios)
-        c.print(f"  {i}) {esc.nombre}")
-        c.print(f"     Imperios: {imperios}")
+        c.print(f"  {c_cyan(str(i))}) {c_blanco(c_negrita(esc.nombre))} ({esc.epoca})")
+        c.print(f"     Imperios: {c_gris(imperios)}")
     eleccion = _leer(c, f"\nElige escenario [1-{len(claves)}] (1): ", "1")
     try:
         indice = int(eleccion) - 1
@@ -644,12 +707,12 @@ def menu_principal(consola: "Consola | None" = None) -> None:
     esc = ESCENARIOS[escenario]
 
     # --- Eleccion del imperio con el que se juega ---
-    c.print("\nImperios del escenario:")
+    c.print(c_amarillo(c_negrita(f"\nImperios disponibles en {esc.nombre}:")))
     for i, imp in enumerate(esc.imperios, 1):
-        c.print(f"  {i}) {imp.nombre}")
+        c.print(f"  {c_cyan(str(i))}) {c_blanco(imp.nombre)} (Perfil IA por defecto: {imp.perfil})")
     eleccion = _leer(
         c,
-        f"\nElige imperio [1-{len(esc.imperios)}] (1): ",
+        f"\nElige imperio a gobernar [1-{len(esc.imperios)}] (1): ",
         "1",
     )
     try:
@@ -661,27 +724,27 @@ def menu_principal(consola: "Consola | None" = None) -> None:
     imperio_humano = esc.imperios[indice].nombre
 
     # --- Eleccion de modo ---
-    c.print("\nModo de juego:")
-    c.print("  1) Partida interactiva (tu controlas el imperio elegido)")
-    c.print("  2) Demo automatica (todos los imperios con IA)")
+    c.print(c_amarillo(c_negrita("\nModo de ejecucion:")))
+    c.print(f"  {c_cyan('1')}) Partida interactiva (tu controlas {imperio_humano})")
+    c.print(f"  {c_cyan('2')}) Demostracion automatica (todos los imperios controlados por IA)")
     modo = _leer(c, "\nElige modo [1-2] (1): ", "1")
     demo = modo.strip() == "2"
 
     # --- Parametros ---
     if demo:
-        turnos = _leer(c, "Turnos de la demo (5): ", "5")
+        turnos = _leer(c, "\nTurnos de la demo (5): ", "5")
         try:
             max_turnos = max(1, int(turnos))
         except ValueError:
             max_turnos = 5
     else:
-        turnos = _leer(c, "Limite de turnos [Enter = sin limite]: ", "")
+        turnos = _leer(c, "\nLimite de turnos [Enter = sin limite]: ", "")
         try:
             max_turnos = int(turnos) if turnos else None
         except ValueError:
             max_turnos = None
 
-    semilla = _leer(c, "Semilla aleatoria [Enter = al azar]: ", "")
+    semilla = _leer(c, "Semilla aleatoria determinista [Enter = al azar]: ", "")
     try:
         seed = int(semilla) if semilla else None
     except ValueError:
@@ -716,16 +779,17 @@ def partida_interactiva(
     estado, motor, nombre_esc = crear_partida(
         seed=seed, escenario=escenario, imperio_humano=imperio_humano
     )
-    # La distribucion de territorios es fija (escenario); solo se programa
-    # el primer REFUERZO de la LEF.
     motor._programar(FASE_REFUERZO, estado.jugadores_activos()[0], PRIO_REFUERZO)
 
-    c.print("=" * 70)
-    c.print("  AGE OF CONQUEST - MOTOR DE SIMULACION (proyecto SIMUSIST)")
-    c.print(f"  Escenario: {nombre_esc} ({ESCENARIOS[escenario].epoca})")
-    c.print("=" * 70)
+    c.limpiar()
+    c.print(c_cyan(c_negrita("==============================================================================")))
+    c.print(c_cyan(c_negrita("  AGE OF CONQUEST -- SIMULADOR OPERACIONAL (SIMUSIST)")))
+    c.print(c_cyan(c_negrita(f"  Escenario: {nombre_esc:<24} ({ESCENARIOS[escenario].epoca:<15})")))
+    c.print(c_cyan(c_negrita("==============================================================================")))
     c.print(tabla_general(estado))
-    c.print("Comandos durante tu turno: consulta 'ayuda' en la fase de ataque.")
+
+    humano_id = next((j.id for j in estado.jugadores.values() if j.humano), None)
+    humano_nombre = estado.jugadores[humano_id].nombre if humano_id is not None else ""
 
     ultimos = 0
     turno_anterior = estado.turno
@@ -734,24 +798,30 @@ def partida_interactiva(
             estado.simulacion_activa = False
             break
         motor.procesar_siguiente()
-        # Imprimir los eventos generados por el motor desde la ultima vez
         nuevos = estado.historial[ultimos:]
         ultimos = len(estado.historial)
         for linea in nuevos:
-            c.print(f"  * {linea}")
-        # Resumen al cierre de cada ronda global
+            # Resaltar eventos que afectan al jugador humano
+            if humano_nombre and humano_nombre in linea:
+                if "conquisto" in linea or "rebelion" in linea or "bancarrota" in linea:
+                    c.print(c_magenta(c_negrita(f"  [EVENTO] {linea}")))
+                else:
+                    c.print(c_cyan(f"  * {linea}"))
+            else:
+                c.print(f"  * {linea}")
+
         if estado.turno != turno_anterior:
             turno_anterior = estado.turno
             c.print("\n" + tabla_general(estado) + "\n")
 
-    c.print("\n" + "=" * 70)
-    c.print("FIN DE LA PARTIDA")
-    c.print("=" * 70)
+    c.print("\n" + c_cyan(c_negrita("=" * 78)))
+    c.print(c_cyan(c_negrita("  FIN DE LA PARTIDA")))
+    c.print(c_cyan(c_negrita("=" * 78)))
     c.print(tabla_general(estado))
     if estado.ganador is not None:
-        c.print(f"\nGANADOR: {estado.jugadores[estado.ganador].nombre}")
+        c.print(c_verde(c_negrita(f"\n[GANADOR INDISCUTIBLE: {estado.jugadores[estado.ganador].nombre}]")))
     else:
-        c.print(f"\nPartida detenida en el turno {estado.turno} (limite alcanzado).")
+        c.print(c_amarillo(f"\nPartida detenida en el turno {estado.turno} (limite alcanzado)."))
 
 
 def partida_demo(
@@ -767,12 +837,13 @@ def partida_demo(
     )
     motor._programar(FASE_REFUERZO, estado.jugadores_activos()[0], PRIO_REFUERZO)
 
-    c.print("=" * 70)
-    c.print("  AGE OF CONQUEST - DEMO AUTOMATICA (todos los imperios son IA)")
-    c.print(f"  Escenario: {nombre_esc} ({ESCENARIOS[escenario].epoca})")
-    c.print("=" * 70)
+    c.limpiar()
+    c.print(c_cyan(c_negrita("==============================================================================")))
+    c.print(c_cyan(c_negrita("  AGE OF CONQUEST -- DEMO AUTOMATICA (MODO IA COMPLETO)")))
+    c.print(c_cyan(c_negrita(f"  Escenario: {nombre_esc:<24} ({ESCENARIOS[escenario].epoca:<15})")))
+    c.print(c_cyan(c_negrita("==============================================================================")))
     c.print(tabla_general(estado))
-    c.print(f"\nEjecutando {max_turnos} turnos con IA...\n")
+    c.print(c_amarillo(f"\nEjecutando {max_turnos} turnos con IA...\n"))
 
     ultimos = 0
     turno_anterior = estado.turno
@@ -788,10 +859,12 @@ def partida_demo(
             turno_anterior = estado.turno
             c.print("\n" + tabla_general(estado) + "\n")
 
-    c.print("\n" + "=" * 70)
-    c.print("FIN DE LA DEMO")
-    c.print("=" * 70)
+    c.print("\n" + c_cyan(c_negrita("=" * 78)))
+    c.print(c_cyan(c_negrita("  FIN DE LA DEMO AUTOMATICA")))
+    c.print(c_cyan(c_negrita("=" * 78)))
     c.print(tabla_general(estado))
     c.print(mapa_compacto(estado))
     if estado.ganador is not None:
-        c.print(f"\nGANADOR: {estado.jugadores[estado.ganador].nombre}")
+        c.print(c_verde(c_negrita(f"\n[GANADOR: {estado.jugadores[estado.ganador].nombre}]")))
+
+
